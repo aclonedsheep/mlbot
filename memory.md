@@ -57,3 +57,10 @@
 - Decisions: preserve whether a stat group was explicitly requested while parsing; after player resolution, infer the default group from MLB player search primary position, using pitching for `Pitcher`/`P`-style positions and hitting otherwise.
 - Commands: `@sstats <pitcher>` now defaults to pitching, while explicit overrides such as `@sstats Tarik Skubal hitting` still work.
 - Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 22 tests; `ruff check .` passes.
+
+## 2026-05-31 - Iteration 8: IRC Self-Reply Guard
+
+- Goal: fix a live IRC smoke-test bug where help replies beginning with bot commands could be parsed again by the bot.
+- Finding: the bot responded to its own channel messages, causing queued, mismatched replies such as `@help mlb` leading to an accidental `@mlb [today|tomorrow|yesterday]` parse.
+- Decision: ignore `PRIVMSG` lines from the current or configured bot nick before command routing.
+- Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 23 tests; `ruff check .` passes.

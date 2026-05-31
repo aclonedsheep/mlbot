@@ -91,6 +91,12 @@ class MLBServer(BaseServer):
         if line.command != "PRIVMSG" or len(line.params) < 2:
             return
         target, message = line.params[0], line.params[1]
+        if _is_own_message(
+            line.hostmask.nickname,
+            current_nick=self.nickname,
+            configured_nick=self.service.settings.irc_nick,
+        ):
+            return
         if target != self.service.settings.irc_channel and target != self.nickname:
             return
         replies = await self.service.router.handle_message(message)
@@ -109,3 +115,16 @@ class MLBServer(BaseServer):
 
     async def send_channel_message(self, message: str) -> None:
         await self.send_message(self.service.settings.irc_channel, message)
+
+
+def _is_own_message(
+    sender: str | None, *, current_nick: str | None, configured_nick: str
+) -> bool:
+    if not sender:
+        return False
+    normalized = sender.casefold()
+    return normalized in {
+        nick.casefold()
+        for nick in (current_nick, configured_nick)
+        if nick
+    }
