@@ -64,3 +64,5 @@
 - Finding: the bot responded to its own channel messages, causing queued, mismatched replies such as `@help mlb` leading to an accidental `@mlb [today|tomorrow|yesterday]` parse.
 - Decision: ignore `PRIVMSG` lines from the current or configured bot nick before command routing.
 - Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 23 tests; `ruff check .` passes.
+- Live IRC smoke: after VPS deploy, a validated sweep in `#mlbtest` passed 23/23 command checks covering help, `@mlb`, `@mlb *`, team/date/game lookup, standings, wildcard, pitcher-default `@sstats`, leaders, pitcher lines, and lineups.
+- Follow-ups noticed: all-league standings can truncate; `@help` top-level could advertise `@mlb *`; detailed game lookup could include game id and last play more consistently.
