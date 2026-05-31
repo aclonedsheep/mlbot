@@ -28,20 +28,21 @@ class MLBIRCService:
     async def run(self) -> None:
         await self.store.init()
         bot = MLBBot(self)
-        params = ConnectionParams(
-            self.settings.irc_nick,
-            self.settings.irc_server,
-            self.settings.irc_port,
-            tls=None if not self.settings.irc_tls else None,
-            realname=self.settings.irc_realname,
-            password=self.settings.irc_password,
-            autojoin=[self.settings.irc_channel],
-        )
         if self.settings.irc_tls:
             params = ConnectionParams(
                 self.settings.irc_nick,
                 self.settings.irc_server,
                 self.settings.irc_port,
+                realname=self.settings.irc_realname,
+                password=self.settings.irc_password,
+                autojoin=[self.settings.irc_channel],
+            )
+        else:
+            params = ConnectionParams(
+                self.settings.irc_nick,
+                self.settings.irc_server,
+                self.settings.irc_port,
+                tls=None,
                 realname=self.settings.irc_realname,
                 password=self.settings.irc_password,
                 autojoin=[self.settings.irc_channel],
@@ -95,7 +96,11 @@ class MLBServer(BaseServer):
         replies = await self.service.router.handle_message(message)
         if not replies:
             return
-        response_target = self.service.settings.irc_channel if target.startswith("#") else line.hostmask.nickname
+        response_target = (
+            self.service.settings.irc_channel
+            if target.startswith("#")
+            else line.hostmask.nickname
+        )
         for reply in replies:
             await self.send_message(response_target, reply)
 

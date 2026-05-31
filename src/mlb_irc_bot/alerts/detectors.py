@@ -40,7 +40,9 @@ def _home_run_alerts(feed: JsonDict) -> list[Alert]:
         batter = _person_name(play.get("matchup", {}).get("batter"))
         description = result.get("description") or f"Home run by {batter}"
         key = f"{game_pk}:hr:{play.get('about', {}).get('atBatIndex', index)}"
-        alerts.append(Alert(key=key, alert_type="home_run", game_pk=game_pk, message=f"HR: {description}"))
+        alerts.append(
+            Alert(key=key, alert_type="home_run", game_pk=game_pk, message=f"HR: {description}")
+        )
     return alerts
 
 
@@ -56,7 +58,14 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
         result = play.get("result") or {}
         description = result.get("description") or result.get("event") or "Run scored"
         key = f"{game_pk}:score:{play.get('about', {}).get('atBatIndex', index)}"
-        alerts.append(Alert(key=key, alert_type="scoring", game_pk=game_pk, message=f"Scoring play: {description}"))
+        alerts.append(
+            Alert(
+                key=key,
+                alert_type="scoring",
+                game_pk=game_pk,
+                message=f"Scoring play: {description}",
+            )
+        )
     return alerts
 
 
@@ -122,7 +131,10 @@ def _no_hit_alerts(feed: JsonDict) -> list[Alert]:
                 key=key,
                 alert_type="no_hitter",
                 game_pk=game_pk,
-                message=f"No-hit bid: {pitching_abbr} has held {batting_abbr} hitless through inning {inning}.",
+                message=(
+                    f"No-hit bid: {pitching_abbr} has held {batting_abbr} "
+                    f"hitless through inning {inning}."
+                ),
             )
         )
     return alerts
@@ -147,7 +159,10 @@ def _cycle_alerts(feed: JsonDict) -> list[Alert]:
                     key=f"{game_pk}:cycle:{player_id}",
                     alert_type="cycle",
                     game_pk=game_pk,
-                    message=f"Cycle completed: {player_name} has singled, doubled, tripled, and homered.",
+                    message=(
+                        f"Cycle completed: {player_name} has singled, doubled, "
+                        "tripled, and homered."
+                    ),
                 )
             )
         elif len(missing) == 1:
@@ -170,25 +185,33 @@ def _immaculate_alerts(feed: JsonDict) -> list[Alert]:
         pitcher = ((play.get("matchup") or {}).get("pitcher") or {}).get("id")
         if pitcher is None:
             continue
-        grouped[(int(about.get("inning") or 0), about.get("halfInning") or "", int(pitcher))].append(play)
+        group_key = (int(about.get("inning") or 0), about.get("halfInning") or "", int(pitcher))
+        grouped[group_key].append(play)
 
     alerts = []
     for (inning, half, pitcher_id), plays in grouped.items():
         if len(plays) != 3:
             continue
-        if not all("strikeout" in ((play.get("result") or {}).get("event") or "").lower() for play in plays):
+        if not all(
+            "strikeout" in ((play.get("result") or {}).get("event") or "").lower()
+            for play in plays
+        ):
             continue
         pitch_count = sum(_pitch_count(play) for play in plays)
         if pitch_count != 9:
             continue
-        pitcher_name = _person_name((plays[0].get("matchup") or {}).get("pitcher")) or str(pitcher_id)
+        pitcher_name = _person_name((plays[0].get("matchup") or {}).get("pitcher"))
+        pitcher_name = pitcher_name or str(pitcher_id)
         key = f"{game_pk}:immaculate:{pitcher_id}:{inning}:{half}"
         alerts.append(
             Alert(
                 key=key,
                 alert_type="immaculate",
                 game_pk=game_pk,
-                message=f"Immaculate inning: {pitcher_name} struck out the side on 9 pitches in the {half} {inning}.",
+                message=(
+                    f"Immaculate inning: {pitcher_name} struck out the side "
+                    f"on 9 pitches in the {half} {inning}."
+                ),
             )
         )
     return alerts

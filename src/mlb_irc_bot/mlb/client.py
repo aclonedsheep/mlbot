@@ -74,9 +74,18 @@ class MLBStatsClient:
     async def __aexit__(self, *_exc: object) -> None:
         await self.close()
 
-    async def get_schedule(self, target_date: date, team_id: int | None = None) -> list[GameSummary]:
-        payload = await self._get("/v1/schedule", params=schedule_params(target_date.isoformat(), team_id))
-        return [self._parse_schedule_game(game) for day in payload.get("dates", []) for game in day.get("games", [])]
+    async def get_schedule(
+        self, target_date: date, team_id: int | None = None
+    ) -> list[GameSummary]:
+        payload = await self._get(
+            "/v1/schedule",
+            params=schedule_params(target_date.isoformat(), team_id),
+        )
+        return [
+            self._parse_schedule_game(game)
+            for day in payload.get("dates", [])
+            for game in day.get("games", [])
+        ]
 
     async def get_schedule_by_game_pk(self, game_pk: int) -> GameSummary | None:
         payload = await self._get(
@@ -131,12 +140,16 @@ class MLBStatsClient:
                     StandingTeam(
                         team_id=team_id,
                         team_name=team.get("name") or TEAM_DIRECTORY.name_for_id(team_id),
-                        abbreviation=team.get("abbreviation") or TEAM_DIRECTORY.abbreviation_for_id(team_id),
+                        abbreviation=(
+                            team.get("abbreviation") or TEAM_DIRECTORY.abbreviation_for_id(team_id)
+                        ),
                         league_name=league_name,
                         division_name=division_name,
                         wins=_int(team_record.get("wins")),
                         losses=_int(team_record.get("losses")),
-                        pct=str(team_record.get("winningPercentage") or team_record.get("pct") or ""),
+                        pct=str(
+                            team_record.get("winningPercentage") or team_record.get("pct") or ""
+                        ),
                         games_back=str(team_record.get("gamesBack") or "-"),
                         wild_card_games_back=str(team_record.get("wildCardGamesBack") or "-"),
                         division_rank=str(team_record.get("divisionRank") or ""),
@@ -162,7 +175,9 @@ class MLBStatsClient:
             if person.get("id") is not None
         ]
 
-    async def get_player_stats(self, player: PlayerSearchResult, *, group: str, season: int) -> PlayerStats:
+    async def get_player_stats(
+        self, player: PlayerSearchResult, *, group: str, season: int
+    ) -> PlayerStats:
         payload = await self._get(
             f"/v1/people/{player.person_id}/stats",
             params={"stats": "season", "group": group, "season": season, "sportId": 1},

@@ -22,6 +22,8 @@ Planning probe on 2026-05-31:
 
 The implementation keeps hydration strings centralized in `mlb/hydrate.py` and includes tests for fallback behavior.
 
+Use `mlb-api-probe --date YYYY-MM-DD` for an opt-in live check of schedule hydration behavior.
+
 ## Usage Notice
 
 MLBAM states that individual, non-commercial, non-bulk use of MLB materials is permitted, and other uses require authorization. Keep polling conservative and cache responses where practical.

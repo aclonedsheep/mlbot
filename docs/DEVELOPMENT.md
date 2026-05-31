@@ -2,6 +2,8 @@
 
 ## Setup
 
+Use Python 3.12. The current `ircrobots` release pins AnyIO 2, so the project metadata intentionally excludes Python 3.13 while the compatible HTTPX pin still imports deprecated stdlib modules removed in 3.13.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[dev]"
@@ -25,4 +27,8 @@ Before every substantial git checkpoint:
 
 ## Live API Probes
 
-Normal tests should not require network access. Add opt-in probes for MLB API drift checks and keep recorded fixtures for deterministic tests.
+Normal tests should not require network access. Use this opt-in command for MLB API drift checks:
+
+```powershell
+.\.venv\Scripts\mlb-api-probe --date 2026-05-31
+```

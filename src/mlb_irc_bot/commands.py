@@ -64,7 +64,10 @@ class CommandRouter:
             return [f"MLB API error: {exc}"]
         except ValueError as exc:
             return [f"Command error: {exc}"]
-        return [f"Unknown command: {self.settings.command_prefix}{command}. Try {self.settings.command_prefix}help."]
+        return [
+            f"Unknown command: {self.settings.command_prefix}{command}. "
+            f"Try {self.settings.command_prefix}help."
+        ]
 
     async def _mlb(self, args: list[str]) -> list[str]:
         if not args:
@@ -80,7 +83,10 @@ class CommandRouter:
 
         team = self.teams.resolve(args[0])
         if team is None:
-            return [f"Unknown team '{args[0]}'. Try an MLB abbreviation like NYY, LAD, SEA, or BOS."]
+            return [
+                f"Unknown team '{args[0]}'. "
+                "Try an MLB abbreviation like NYY, LAD, SEA, or BOS."
+            ]
 
         target_date = self._date_for(args[1]) if len(args) > 1 else self._date_for("today")
         games = await self.client.get_schedule(target_date, team_id=team.team_id)
@@ -118,7 +124,7 @@ class CommandRouter:
 
     async def _season_stats(self, args: list[str]) -> list[str]:
         if not args:
-            return [f"Usage: {self.settings.command_prefix}sstats <player name> [hitting|pitching|fielding] [season]"]
+            return [self._sstats_usage()]
         season = self.now().year
         group = "hitting"
         remaining = list(args)
@@ -128,7 +134,7 @@ class CommandRouter:
             group = remaining.pop().lower()
         name = " ".join(remaining).strip()
         if not name:
-            return [f"Usage: {self.settings.command_prefix}sstats <player name> [hitting|pitching|fielding] [season]"]
+            return [self._sstats_usage()]
 
         matches = await self.client.search_people(name)
         if not matches:
@@ -140,7 +146,10 @@ class CommandRouter:
             player = matches[0]
         else:
             candidates = [
-                f"{player.full_name} ({player.team_name or 'no team'}, {player.position or 'unknown'})"
+                (
+                    f"{player.full_name} "
+                    f"({player.team_name or 'no team'}, {player.position or 'unknown'})"
+                )
                 for player in matches[:5]
             ]
             return [format_player_candidates(candidates)]
@@ -162,7 +171,9 @@ class CommandRouter:
         topic = args[0].lower() if args else ""
         if topic == "mlb":
             return [
-                f"{prefix}mlb [today|tomorrow|yesterday] | {prefix}mlb TEAM [today|tomorrow|yesterday] | {prefix}mlb game GAMEPK"
+                f"{prefix}mlb [today|tomorrow|yesterday] | "
+                f"{prefix}mlb TEAM [today|tomorrow|yesterday] | "
+                f"{prefix}mlb game GAMEPK"
             ]
         if topic == "standings":
             return [f"{prefix}standings [AL|NL|TEAM] and {prefix}wildcard [AL|NL|all]"]
@@ -176,6 +187,12 @@ class CommandRouter:
             f"{prefix}wildcard, {prefix}sstats, {prefix}leaders, {prefix}help <command>"
         ]
 
+    def _sstats_usage(self) -> str:
+        return (
+            f"Usage: {self.settings.command_prefix}sstats <player name> "
+            "[hitting|pitching|fielding] [season]"
+        )
+
     def _date_for(self, value: str) -> date:
         today = self.now().date()
         value = value.lower()
@@ -188,7 +205,9 @@ class CommandRouter:
         try:
             return date.fromisoformat(value)
         except ValueError as exc:
-            raise ValueError(f"unknown date '{value}'. Use today, tomorrow, yesterday, or YYYY-MM-DD.") from exc
+            raise ValueError(
+                f"unknown date '{value}'. Use today, tomorrow, yesterday, or YYYY-MM-DD."
+            ) from exc
 
 
 def _league_from_scope(scope: str) -> str | None:

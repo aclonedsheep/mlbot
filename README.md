@@ -19,6 +19,8 @@ See [docs/COMMANDS.md](docs/COMMANDS.md) for details.
 
 ## Local Setup
 
+Use Python 3.12. The IRC dependency currently pins an async stack that is not compatible with Python 3.13.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[dev]"
@@ -39,6 +41,14 @@ docker compose up --build
 ```
 
 The SQLite database is stored under `data/` by default.
+
+## MLB API Probe
+
+Run the opt-in probe when checking for MLB API drift:
+
+```powershell
+.\.venv\Scripts\mlb-api-probe --date 2026-05-31
+```
 
 ## API Notice
 

@@ -17,3 +17,12 @@
 - Alerts: implemented pure detectors for home runs, scoring plays, bases-loaded situations, finals, no-hit bids, cycle watch/completion, and immaculate innings.
 - Files: added core modules under `src/mlb_irc_bot/`.
 - Verification: `python -m compileall src` passes.
+
+## 2026-05-31 - Iteration 3: Tests, Compatibility, And Probe
+
+- Goal: add deterministic test coverage and finish project verification.
+- Decisions: pin project runtime to Python 3.12 because `ircrobots` 0.7.2 pins AnyIO 2, requiring an older HTTPX/RESPX pair that is not Python 3.13 compatible.
+- Added tests: command routing, team aliases, config overrides, alert detectors, SQLite alert dedupe, schedule hydration parsing, and game-detail fallback behavior.
+- Added `mlb-api-probe` for opt-in live MLB API drift checks without making normal tests depend on the network.
+- Verification: Python 3.12.13 `pytest` passes with 11 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes; `python -m mlb_irc_bot.probe --help` passes; `compileall src tests` passes.
+- Verification gap: Docker Compose config was not run because Docker is not installed on this machine.

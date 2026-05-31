@@ -9,7 +9,11 @@ from mlb_irc_bot.storage import AlertStore
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the MLB IRC bot.")
-    parser.add_argument("--dry-run", action="store_true", help="Load config and initialize storage, then exit.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Load config and initialize storage, then exit.",
+    )
     parser.add_argument("--log-level", default="INFO", help="Python logging level.")
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO))

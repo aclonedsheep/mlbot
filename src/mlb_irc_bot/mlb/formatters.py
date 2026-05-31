@@ -64,7 +64,9 @@ def score(game: GameSummary) -> str:
     return f"{game.away.abbreviation} {away_score}, {game.home.abbreviation} {home_score}"
 
 
-def format_standings(records: list[StandingTeam], *, title: str, wildcard: bool = False) -> list[str]:
+def format_standings(
+    records: list[StandingTeam], *, title: str, wildcard: bool = False
+) -> list[str]:
     if not records:
         return [f"{title}: no standings available."]
     group_attr = "league_name" if wildcard else "division_name"
@@ -107,7 +109,10 @@ def format_player_stats(stats: PlayerStats) -> str:
         "fielding": ("games", "assists", "putOuts", "errors", "fielding"),
     }.get(stats.group, ())
     if not stats.stats:
-        return f"No {stats.group} season stats found for {stats.player.full_name} in {stats.season}."
+        return (
+            f"No {stats.group} season stats found for "
+            f"{stats.player.full_name} in {stats.season}."
+        )
     bits = [f"{key} {stats.stats[key]}" for key in keys if key in stats.stats]
     return _truncate(f"{stats.player.full_name} {stats.season} {stats.group}: " + ", ".join(bits))
 
