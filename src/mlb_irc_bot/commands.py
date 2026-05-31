@@ -174,9 +174,10 @@ class CommandRouter:
                 if record.team_id == team.team_id:
                     return [format_team_standing(record)]
             return [f"No standings record found for {team.abbreviation}."]
-        title = ("Wildcard" if wildcard else "Standings") + (
-            f" {league}" if league else ""
-        )
+        if wildcard:
+            title = f"{league} wildcard standings" if league else "Wildcard standings"
+        else:
+            title = f"{league} standings" if league else "Standings"
         return format_standings(records, title=title, wildcard=wildcard)
 
     async def _season_stats(self, args: list[str]) -> list[str]:

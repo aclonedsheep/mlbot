@@ -19,9 +19,8 @@ MAX_IRC_LEN = 390
 def format_schedule(games: list[GameSummary], target_date: date, tz: ZoneInfo) -> list[str]:
     if not games:
         return [f"MLB {target_date.isoformat()}: no games scheduled."]
-    lines = [f"MLB {target_date.isoformat()}: {len(games)} game(s)"]
-    lines.extend(_truncate(format_game_summary(game, tz)) for game in games)
-    return lines
+    bits = [format_game_summary(game, tz) for game in games]
+    return [_truncate(f"MLB {target_date.isoformat()}: " + "; ".join(bits))]
 
 
 def format_compact_schedule(
@@ -79,10 +78,9 @@ def format_game_summary(game: GameSummary, tz: ZoneInfo) -> str:
 def format_game_detail(detail: GameDetail, tz: ZoneInfo) -> list[str]:
     game = detail.summary
     line = format_game_summary(game, tz)
-    lines = [line]
     if detail.last_play:
-        lines.append(_truncate(f"Last play: {detail.last_play}"))
-    return lines
+        line += f" | Last play: {detail.last_play}"
+    return [_truncate(line)]
 
 
 def format_linescore(game: GameSummary) -> str:
@@ -120,19 +118,25 @@ def format_standings(
     for record in records:
         grouped[getattr(record, group_attr) or "MLB"].append(record)
 
-    lines = [title]
+    group_lines = []
     for group_name in sorted(grouped):
         teams = sorted(
             grouped[group_name],
             key=lambda item: _rank_key(item.wild_card_rank if wildcard else item.division_rank),
         )
+        display_teams = teams[:6 if wildcard else 3]
         bits = []
-        for team in teams:
+        for team in display_teams:
             back = team.wild_card_games_back if wildcard else team.games_back
             rank = team.wild_card_rank if wildcard else team.division_rank
-            bits.append(f"{rank}. {team.abbreviation} {team.wins}-{team.losses} ({back} GB)")
-        lines.append(_truncate(f"{group_name}: " + "; ".join(bits)))
-    return lines
+            bits.append(f"{rank}. {team.abbreviation} {team.wins}-{team.losses} {back} GB")
+        if len(teams) > len(display_teams):
+            bits.append(f"+{len(teams) - len(display_teams)} more")
+        group_lines.append(f"{_short_group_name(group_name)}: " + ", ".join(bits))
+    if len(group_lines) == 1:
+        _, _, only_group = group_lines[0].partition(": ")
+        return [_truncate(f"{title}: {only_group}")]
+    return [_truncate(f"{title}: " + " | ".join(group_lines))]
 
 
 def format_team_standing(record: StandingTeam) -> str:
@@ -204,14 +208,13 @@ def format_pitchers(groups: list[TeamPitchers], game: GameSummary) -> list[str]:
             f"Pitchers are not available yet for "
             f"{game.away.abbreviation} vs {game.home.abbreviation}."
         ]
-    return [
-        _truncate(
-            f"Pitchers {group.team.abbreviation}: "
-            + ", ".join(pitcher.full_name for pitcher in group.pitchers)
-        )
+    bits = [
+        f"{group.team.abbreviation}: "
+        + ", ".join(pitcher.full_name for pitcher in group.pitchers)
         for group in groups
         if group.pitchers
     ]
+    return [_truncate("Pitchers: " + " | ".join(bits))]
 
 
 def format_lineup(lineup: TeamLineup | None, game: GameSummary, requested_abbreviation: str) -> str:
@@ -247,6 +250,14 @@ def _rank_key(value: str) -> tuple[int, str]:
         return (int(value), value)
     except ValueError:
         return (999, value)
+
+
+def _short_group_name(value: str) -> str:
+    return (
+        value.replace("American League", "AL")
+        .replace("National League", "NL")
+        .replace(" Division", "")
+    )
 
 
 def _truncate(value: str) -> str:

@@ -54,7 +54,7 @@ class FakeClient:
 
     async def get_standings(self, *, season: int, standings_type: str, league: str | None):
         self.standings_calls.append((season, standings_type, league))
-        return [
+        records = [
             StandingTeam(
                 team_id=147,
                 team_name="New York Yankees",
@@ -73,6 +73,27 @@ class FakeClient:
                 last_ten="7-3",
             )
         ]
+        if league is None:
+            records.append(
+                StandingTeam(
+                    team_id=119,
+                    team_name="Los Angeles Dodgers",
+                    abbreviation="LAD",
+                    league_name="National League",
+                    division_name="NL West",
+                    wins=33,
+                    losses=21,
+                    pct=".611",
+                    games_back="-",
+                    wild_card_games_back="+1.0",
+                    division_rank="1",
+                    league_rank="1",
+                    wild_card_rank="1",
+                    streak="W1",
+                    last_ten="6-4",
+                )
+            )
+        return records
 
     async def search_people(self, name: str):
         return [
@@ -158,8 +179,7 @@ async def test_mlb_pitchers_shows_all_game_pitchers() -> None:
     replies = await router.handle_message("@mlbpitchers TOR")
 
     assert replies == [
-        "Pitchers TOR: Spencer Miles, Reliever One",
-        "Pitchers BAL: Kyle Bradish",
+        "Pitchers: TOR: Spencer Miles, Reliever One | BAL: Kyle Bradish",
     ]
 
 
@@ -183,8 +203,21 @@ async def test_wildcard_command_requests_wildcard_standings() -> None:
     replies = await router.handle_message("@wildcard AL")
 
     assert client.standings_calls == [(2026, "wildCard", "AL")]
-    assert replies[0] == "Wildcard AL"
-    assert "NYY 34-20" in replies[1]
+    assert replies == ["AL wildcard standings: 1. NYY 34-20 +2.0 GB"]
+
+
+@pytest.mark.asyncio
+async def test_wildcard_default_returns_both_leagues() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@wildcard")
+
+    assert client.standings_calls == [(2026, "wildCard", None)]
+    assert replies == [
+        "Wildcard standings: AL: 1. NYY 34-20 +2.0 GB | "
+        "NL: 1. LAD 33-21 +1.0 GB"
+    ]
 
 
 @pytest.mark.asyncio
