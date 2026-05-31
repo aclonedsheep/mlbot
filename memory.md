@@ -50,3 +50,10 @@
 - API finding: live probes confirmed MLB Stats API exposes public sabermetric fields including WAR/wRC+/FIP and expected-stat fields including expected AVG/SLG/wOBA-style values; complete Baseball Savant/Statcast metrics may still need a separate source.
 - Commands: `@sstats <player> [group] [season] [N days]` now maps day windows to `byDateRange`/`byDateRangeAdvanced`; existing season requests include basic, advanced, sabermetric, and expected sections when available.
 - Verification: Python 3.12.13 `pytest` passes with 20 tests; `ruff check .` passes; live client smoke test returned formatted Ohtani hitting season/recent stats and Skubal pitching season stats.
+
+## 2026-05-31 - Iteration 7: Pitcher-Aware Stat Defaults
+
+- Goal: make `@sstats Skubal` and other primary pitchers default to pitching stats without requiring the `pitching` argument.
+- Decisions: preserve whether a stat group was explicitly requested while parsing; after player resolution, infer the default group from MLB player search primary position, using pitching for `Pitcher`/`P`-style positions and hitting otherwise.
+- Commands: `@sstats <pitcher>` now defaults to pitching, while explicit overrides such as `@sstats Tarik Skubal hitting` still work.
+- Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 22 tests; `ruff check .` passes.

@@ -15,7 +15,7 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 - `@mlblineup TEAM` shows the posted lineup for that team.
 - `@standings [AL|NL|division|TEAM]` shows regular-season standings.
 - `@wildcard [AL|NL|all]` shows wildcard standings.
-- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]` shows season or recent stats.
+- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]` shows season or recent stats, defaulting pitchers to pitching stats.
 - `@leaders <category> [limit]` shows stat leaders.
 - `@help [command]` lists command help.
 

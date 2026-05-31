@@ -49,13 +49,14 @@ Examples:
 
 ## Stats
 
-- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]`: season stats or recent date-range stats.
+- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]`: season stats or recent date-range stats. Pitchers default to pitching stats; everyone else defaults to hitting.
 - `@leaders <category> [limit]`: stat leaders.
 
 Examples:
 
 ```text
 @sstats Shohei Ohtani hitting
+@sstats Tarik Skubal
 @sstats Tarik Skubal pitching 2025
 @sstats Shohei Ohtani hitting 7 days
 @sstats Aaron Judge 30 days

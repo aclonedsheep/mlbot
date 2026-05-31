@@ -99,6 +99,8 @@ class FakeClient:
     async def search_people(self, name: str):
         if name.lower() == "shohei ohtani":
             return [PlayerSearchResult(660271, "Shohei Ohtani", "Los Angeles Dodgers", "DH", True)]
+        if name.lower() == "tarik skubal":
+            return [PlayerSearchResult(669373, "Tarik Skubal", "Detroit Tigers", "Pitcher", True)]
         return [
             PlayerSearchResult(1, "John Smith", "A Team", "P", True),
             PlayerSearchResult(2, "John Smith Jr.", "B Team", "CF", True),
@@ -123,6 +125,23 @@ class FakeClient:
                 advanced_stats={"iso": ".333", "strikeoutsPerPlateAppearance": ".200"},
                 start_date=start_date,
                 end_date=end_date,
+            )
+        if group == "pitching":
+            return PlayerStats(
+                player,
+                group,
+                season,
+                {
+                    "era": "2.70",
+                    "whip": "0.95",
+                    "wins": 3,
+                    "losses": 2,
+                    "inningsPitched": "43.1",
+                    "strikeOuts": 45,
+                },
+                advanced_stats={"strikeoutsPer9": "9.35", "baseOnBallsPer9": "1.25"},
+                sabermetric_stats={"war": 1.5, "fip": 2.07},
+                expected_stats={"avg": ".262", "woba": ".284"},
             )
         return PlayerStats(
             player,
@@ -302,6 +321,31 @@ async def test_sstats_accepts_day_window() -> None:
         "Shohei Ohtani last 7 days hitting: .286/.400/.619 OPS 1.019, 2 HR | "
         "adv: ISO .333, K/PA .200"
     ]
+
+
+@pytest.mark.asyncio
+async def test_sstats_defaults_pitchers_to_pitching_stats() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@sstats Tarik Skubal")
+
+    assert client.stats_calls == [("Tarik Skubal", "pitching", 2026, None, None)]
+    assert replies == [
+        "Tarik Skubal 2026 pitching: 3-2, ERA 2.70, WHIP 0.95, IP 43.1, "
+        "K 45 | adv: K/9 9.35, BB/9 1.25 | sabr: FIP 2.07, WAR 1.5 | "
+        "exp: xAVG .262, xwOBA .284"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sstats_respects_explicit_group_for_pitcher() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    await router.handle_message("@sstats Tarik Skubal hitting")
+
+    assert client.stats_calls == [("Tarik Skubal", "hitting", 2026, None, None)]
 
 
 @pytest.mark.asyncio

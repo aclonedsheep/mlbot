@@ -186,7 +186,7 @@ class CommandRouter:
     async def _season_stats(self, args: list[str]) -> list[str]:
         if not args:
             return [self._sstats_usage()]
-        season, group, window_days, remaining = self._parse_sstats_args(args)
+        season, requested_group, window_days, remaining = self._parse_sstats_args(args)
         name = " ".join(remaining).strip()
         if not name:
             return [self._sstats_usage()]
@@ -208,6 +208,7 @@ class CommandRouter:
                 for player in matches[:5]
             ]
             return [format_player_candidates(candidates)]
+        group = requested_group or _default_stat_group_for_position(player.position)
         end_date = start_date = None
         if window_days is not None:
             end_date = self.now().date()
@@ -251,7 +252,7 @@ class CommandRouter:
         if topic == "sstats":
             return [
                 f"{prefix}sstats <player name> [hitting|pitching|fielding] "
-                f"[season] [7 days|14 days|30 days]"
+                f"[season] [7 days|14 days|30 days]; pitchers default to pitching"
             ]
         if topic == "leaders":
             return [f"{prefix}leaders <category> [limit], e.g. {prefix}leaders homeRuns 5"]
@@ -268,9 +269,11 @@ class CommandRouter:
             "[hitting|pitching|fielding] [season] [7 days|14 days|30 days]"
         )
 
-    def _parse_sstats_args(self, args: list[str]) -> tuple[int, str, int | None, list[str]]:
+    def _parse_sstats_args(
+        self, args: list[str]
+    ) -> tuple[int, str | None, int | None, list[str]]:
         season = self.now().year
-        group = "hitting"
+        group: str | None = None
         window_days: int | None = None
         remaining = list(args)
 
@@ -358,3 +361,12 @@ def _pop_stat_window(args: list[str]) -> int | None:
         del args[-2:]
         return days
     return None
+
+
+def _default_stat_group_for_position(position: str | None) -> str:
+    normalized = (position or "").strip().lower()
+    if normalized in {"p", "sp", "rp", "lhp", "rhp", "pitcher"}:
+        return "pitching"
+    if "pitcher" in normalized:
+        return "pitching"
+    return "hitting"
