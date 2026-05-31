@@ -183,15 +183,79 @@ class MLBStatsClient:
         ]
 
     async def get_player_stats(
-        self, player: PlayerSearchResult, *, group: str, season: int
+        self,
+        player: PlayerSearchResult,
+        *,
+        group: str,
+        season: int,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> PlayerStats:
-        payload = await self._get(
-            f"/v1/people/{player.person_id}/stats",
-            params={"stats": "season", "group": group, "season": season, "sportId": 1},
+        if (start_date is None) != (end_date is None):
+            raise ValueError("start_date and end_date must be supplied together")
+
+        if start_date and end_date:
+            range_params = {
+                "startDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+            }
+            stats = await self._get_player_stat_split(
+                player.person_id,
+                stat_type="byDateRange",
+                group=group,
+                season=season,
+                extra_params=range_params,
+            )
+            advanced = await self._try_player_stat_split(
+                player.person_id,
+                stat_type="byDateRangeAdvanced",
+                group=group,
+                season=season,
+                extra_params=range_params,
+            )
+            return PlayerStats(
+                player=player,
+                group=group,
+                season=season,
+                stats=stats,
+                advanced_stats=advanced,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+        stats = await self._get_player_stat_split(
+            player.person_id,
+            stat_type="season",
+            group=group,
+            season=season,
         )
-        splits = payload.get("stats", [{}])[0].get("splits", [])
-        stats = splits[0].get("stat", {}) if splits else {}
-        return PlayerStats(player=player, group=group, season=season, stats=stats)
+        advanced = await self._try_player_stat_split(
+            player.person_id,
+            stat_type="seasonAdvanced",
+            group=group,
+            season=season,
+        )
+        sabermetric = await self._try_player_stat_split(
+            player.person_id,
+            stat_type="sabermetrics",
+            group=group,
+            season=season,
+        )
+        expected = await self._try_player_stat_split(
+            player.person_id,
+            stat_type="expectedStatistics",
+            group=group,
+            season=season,
+        )
+        return PlayerStats(
+            player=player,
+            group=group,
+            season=season,
+            stats=stats,
+            advanced_stats=advanced,
+            sabermetric_stats=sabermetric,
+            expected_stats=expected,
+        )
 
     async def get_leaders(self, category: str, *, season: int, limit: int = 5) -> list[Leader]:
         category = normalize_leader_category(category)
@@ -228,6 +292,47 @@ class MLBStatsClient:
             params={"sportId": 1, "date": target_date.isoformat(), "hydrate": "hydrations"},
         )
         return list(payload.get("hydrations", []))
+
+    async def _get_player_stat_split(
+        self,
+        person_id: int,
+        *,
+        stat_type: str,
+        group: str,
+        season: int,
+        extra_params: dict[str, str] | None = None,
+    ) -> JsonDict:
+        params = {
+            "stats": stat_type,
+            "group": group,
+            "season": season,
+            "sportId": 1,
+            "gameType": "R",
+        }
+        if extra_params:
+            params.update(extra_params)
+        payload = await self._get(f"/v1/people/{person_id}/stats", params=params)
+        return _best_stat_split(payload)
+
+    async def _try_player_stat_split(
+        self,
+        person_id: int,
+        *,
+        stat_type: str,
+        group: str,
+        season: int,
+        extra_params: dict[str, str] | None = None,
+    ) -> JsonDict:
+        try:
+            return await self._get_player_stat_split(
+                person_id,
+                stat_type=stat_type,
+                group=group,
+                season=season,
+                extra_params=extra_params,
+            )
+        except MLBAPIError:
+            return {}
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> JsonDict:
         url = f"{self.base_url}{path}"
@@ -311,6 +416,11 @@ def current_pitcher_for_team(detail: GameDetail, team_id: int) -> PitcherInfo | 
         side_data = linescore.get(side) or {}
         team = _team_from_team(side_data.get("team") or {})
         if team.id == team_id and side_data.get("pitcher"):
+            pitcher_id = _optional_int(side_data["pitcher"].get("id"))
+            player_record = _pitcher_record_with_team(detail, pitcher_id)
+            if player_record:
+                player, player_team = player_record
+                return _pitcher_from_player_record(player, player_team, pitcher_id)
             return _pitcher_from_person(side_data["pitcher"], team)
     return None
 
@@ -380,6 +490,21 @@ def _player_record(players: JsonDict, player_id: int | str) -> JsonDict:
     return players.get(f"ID{player_id}") or players.get(str(player_id)) or {}
 
 
+def _pitcher_record_with_team(
+    detail: GameDetail, pitcher_id: int | None
+) -> tuple[JsonDict, TeamInfo] | None:
+    if pitcher_id is None:
+        return None
+    teams = _raw_boxscore(detail.raw).get("teams") or {}
+    for side in ("away", "home"):
+        side_data = teams.get(side) or {}
+        player = _player_record(side_data.get("players") or {}, pitcher_id)
+        if player:
+            team = _team_from_team(side_data.get("team") or _raw_game_team(detail.raw, side))
+            return player, team
+    return None
+
+
 def _pitcher_from_player_record(
     player: JsonDict, team: TeamInfo, fallback_player_id: int | str | None = None
 ) -> PitcherInfo:
@@ -388,6 +513,7 @@ def _pitcher_from_player_record(
         player_id=_optional_int(person.get("id") or fallback_player_id),
         full_name=_name(person),
         team=team,
+        game_stats=(player.get("stats") or {}).get("pitching") or {},
     )
 
 
@@ -438,6 +564,18 @@ def _parse_date(value: str | None) -> date | None:
     if not value:
         return None
     return date.fromisoformat(value)
+
+
+def _best_stat_split(payload: JsonDict) -> JsonDict:
+    fallback: JsonDict = {}
+    for stat_group in payload.get("stats") or ():
+        for split in stat_group.get("splits") or ():
+            if not fallback:
+                fallback = split.get("stat") or {}
+            sport_id = (split.get("sport") or {}).get("id")
+            if sport_id in (1, "1"):
+                return split.get("stat") or {}
+    return fallback
 
 
 def _optional_int(value: Any) -> int | None:

@@ -1,6 +1,7 @@
 import shlex
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from re import fullmatch
 
 from mlb_irc_bot.config import Settings
 from mlb_irc_bot.mlb.client import (
@@ -30,6 +31,8 @@ from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY, TeamDirectory
 
 DATE_WORDS = {"today", "tomorrow", "yesterday"}
 STAT_GROUPS = {"hitting", "pitching", "fielding"}
+STAT_WINDOW_WORDS = {"day", "days"}
+MAX_STAT_WINDOW_DAYS = 60
 
 
 class CommandRouter:
@@ -183,13 +186,7 @@ class CommandRouter:
     async def _season_stats(self, args: list[str]) -> list[str]:
         if not args:
             return [self._sstats_usage()]
-        season = self.now().year
-        group = "hitting"
-        remaining = list(args)
-        if remaining and remaining[-1].isdigit() and len(remaining[-1]) == 4:
-            season = int(remaining.pop())
-        if remaining and remaining[-1].lower() in STAT_GROUPS:
-            group = remaining.pop().lower()
+        season, group, window_days, remaining = self._parse_sstats_args(args)
         name = " ".join(remaining).strip()
         if not name:
             return [self._sstats_usage()]
@@ -211,7 +208,17 @@ class CommandRouter:
                 for player in matches[:5]
             ]
             return [format_player_candidates(candidates)]
-        stats = await self.client.get_player_stats(player, group=group, season=season)
+        end_date = start_date = None
+        if window_days is not None:
+            end_date = self.now().date()
+            start_date = end_date - timedelta(days=window_days - 1)
+        stats = await self.client.get_player_stats(
+            player,
+            group=group,
+            season=season,
+            start_date=start_date,
+            end_date=end_date,
+        )
         return [format_player_stats(stats)]
 
     async def _leaders(self, args: list[str]) -> list[str]:
@@ -242,7 +249,10 @@ class CommandRouter:
         if topic == "standings":
             return [f"{prefix}standings [AL|NL|TEAM] and {prefix}wildcard [AL|NL|all]"]
         if topic == "sstats":
-            return [f"{prefix}sstats <player name> [hitting|pitching|fielding] [season]"]
+            return [
+                f"{prefix}sstats <player name> [hitting|pitching|fielding] "
+                f"[season] [7 days|14 days|30 days]"
+            ]
         if topic == "leaders":
             return [f"{prefix}leaders <category> [limit], e.g. {prefix}leaders homeRuns 5"]
         return [
@@ -255,8 +265,37 @@ class CommandRouter:
     def _sstats_usage(self) -> str:
         return (
             f"Usage: {self.settings.command_prefix}sstats <player name> "
-            "[hitting|pitching|fielding] [season]"
+            "[hitting|pitching|fielding] [season] [7 days|14 days|30 days]"
         )
+
+    def _parse_sstats_args(self, args: list[str]) -> tuple[int, str, int | None, list[str]]:
+        season = self.now().year
+        group = "hitting"
+        window_days: int | None = None
+        remaining = list(args)
+
+        changed = True
+        while changed and remaining:
+            changed = False
+            last = remaining[-1].lower()
+            if last in STAT_GROUPS:
+                group = remaining.pop().lower()
+                changed = True
+                continue
+            if remaining[-1].isdigit() and len(remaining[-1]) == 4:
+                season = int(remaining.pop())
+                changed = True
+                continue
+            parsed_window = _pop_stat_window(remaining)
+            if parsed_window is not None:
+                window_days = parsed_window
+                changed = True
+
+        if window_days is not None and not 1 <= window_days <= MAX_STAT_WINDOW_DAYS:
+            raise ValueError(
+                f"stats time window must be 1-{MAX_STAT_WINDOW_DAYS} days."
+            )
+        return season, group, window_days, remaining
 
     def _date_for(self, value: str) -> date:
         today = self.now().date()
@@ -304,3 +343,18 @@ def _is_iso_date(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _pop_stat_window(args: list[str]) -> int | None:
+    if not args:
+        return None
+    last = args[-1].lower()
+    match = fullmatch(r"(\d+)(?:d|days?)", last)
+    if match:
+        args.pop()
+        return int(match.group(1))
+    if len(args) >= 2 and last in STAT_WINDOW_WORDS and args[-2].isdigit():
+        days = int(args[-2])
+        del args[-2:]
+        return days
+    return None

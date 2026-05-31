@@ -153,18 +153,24 @@ def format_player_candidates(candidates: list[str]) -> str:
 
 
 def format_player_stats(stats: PlayerStats) -> str:
-    keys = {
-        "hitting": ("avg", "homeRuns", "rbi", "runs", "hits", "stolenBases", "ops"),
-        "pitching": ("era", "wins", "losses", "strikeOuts", "whip", "inningsPitched"),
-        "fielding": ("games", "assists", "putOuts", "errors", "fielding"),
-    }.get(stats.group, ())
-    if not stats.stats:
-        return (
-            f"No {stats.group} season stats found for "
-            f"{stats.player.full_name} in {stats.season}."
+    period = _player_stat_period(stats)
+    if not any(
+        (
+            stats.stats,
+            stats.advanced_stats,
+            stats.sabermetric_stats,
+            stats.expected_stats,
         )
-    bits = [f"{key} {stats.stats[key]}" for key in keys if key in stats.stats]
-    return _truncate(f"{stats.player.full_name} {stats.season} {stats.group}: " + ", ".join(bits))
+    ):
+        return (
+            f"No {stats.group} stats found for "
+            f"{stats.player.full_name} {period}."
+        )
+    sections = [section for section in _player_stat_sections(stats) if section]
+    return _truncate(
+        f"{stats.player.full_name} {period} {stats.group}: "
+        + " | ".join(sections)
+    )
 
 
 def format_leaders(category: str, leaders: list[Leader]) -> str:
@@ -186,9 +192,11 @@ def format_current_pitcher(
             f"{requested_abbreviation}: current pitcher is not available for "
             f"{game.away.abbreviation} vs {game.home.abbreviation} ({game.detailed_state})."
         )
+    pitching_line = _format_pitcher_game_stats(pitcher.game_stats)
     return _truncate(
         f"{requested_abbreviation} game pitcher: {pitcher.team.abbreviation} "
-        f"{pitcher.full_name} ({game.away.abbreviation} vs {game.home.abbreviation}, "
+        f"{pitcher.full_name} - {pitching_line} "
+        f"({game.away.abbreviation} vs {game.home.abbreviation}, "
         f"{game.detailed_state or game.status})"
     )
 
@@ -210,7 +218,7 @@ def format_pitchers(groups: list[TeamPitchers], game: GameSummary) -> list[str]:
         ]
     bits = [
         f"{group.team.abbreviation}: "
-        + ", ".join(pitcher.full_name for pitcher in group.pitchers)
+        + "; ".join(_format_pitcher_listing(pitcher) for pitcher in group.pitchers)
         for group in groups
         if group.pitchers
     ]
@@ -236,6 +244,262 @@ def _probables(game: GameSummary) -> str:
     away = game.away_probable_pitcher or "TBD"
     home = game.home_probable_pitcher or "TBD"
     return f" (probables: {away} vs {home})"
+
+
+def _player_stat_period(stats: PlayerStats) -> str:
+    if stats.start_date and stats.end_date:
+        days = (stats.end_date - stats.start_date).days + 1
+        return f"last {days} days"
+    return str(stats.season)
+
+
+def _player_stat_sections(stats: PlayerStats) -> list[str]:
+    if stats.group == "pitching":
+        return [
+            _format_pitching_stats(stats.stats),
+            _prefixed_stats(
+                "adv",
+                stats.advanced_stats,
+                (
+                    ("strikeoutsPer9", "K/9"),
+                    ("baseOnBallsPer9", "BB/9"),
+                    ("homeRunsPer9", "HR/9"),
+                    ("hitsPer9", "H/9"),
+                    (("strikesoutsToWalks", "strikeoutWalkRatio"), "K/BB"),
+                    ("pitchesPerInning", "P/IP"),
+                    ("whiffPercentage", "Whiff%"),
+                ),
+            ),
+            _prefixed_stats(
+                "sabr",
+                stats.sabermetric_stats,
+                (
+                    ("fip", "FIP"),
+                    ("xfip", "xFIP"),
+                    ("fipMinus", "FIP-"),
+                    ("eraMinus", "ERA-"),
+                    ("war", "WAR"),
+                    ("ra9War", "RA9-WAR"),
+                ),
+            ),
+            _prefixed_stats(
+                "exp",
+                stats.expected_stats,
+                (
+                    ("avg", "xAVG"),
+                    ("slg", "xSLG"),
+                    ("woba", "xwOBA"),
+                    ("wobaCon", "xwOBAcon"),
+                ),
+            ),
+        ]
+    if stats.group == "fielding":
+        return [
+            _format_fielding_stats(stats.stats),
+            _prefixed_stats(
+                "adv",
+                stats.advanced_stats,
+                (
+                    ("catcherCaughtStealingPercentage", "CS%"),
+                    ("rangeFactorPerGame", "RF/G"),
+                    ("rangeFactorPer9Inn", "RF/9"),
+                ),
+            ),
+        ]
+    return [
+        _format_hitting_stats(stats.stats),
+        _prefixed_stats(
+            "adv",
+            stats.advanced_stats,
+            (
+                ("babip", "BABIP"),
+                ("iso", "ISO"),
+                ("extraBaseHits", "XBH"),
+                ("pitchesPerPlateAppearance", "P/PA"),
+                ("walksPerPlateAppearance", "BB/PA"),
+                ("strikeoutsPerPlateAppearance", "K/PA"),
+            ),
+        ),
+        _prefixed_stats(
+            "sabr",
+            stats.sabermetric_stats,
+            (
+                ("woba", "wOBA"),
+                ("wRcPlus", "wRC+"),
+                ("war", "WAR"),
+                ("wRaa", "wRAA"),
+                ("baseRunning", "BsR"),
+            ),
+        ),
+        _prefixed_stats(
+            "exp",
+            stats.expected_stats,
+            (
+                ("avg", "xAVG"),
+                ("slg", "xSLG"),
+                ("woba", "xwOBA"),
+                ("wobaCon", "xwOBAcon"),
+            ),
+        ),
+    ]
+
+
+def _format_hitting_stats(stat: dict) -> str:
+    bits: list[str] = []
+    slash = _slash_line(stat, ("avg", "obp", "slg"))
+    if slash:
+        ops = _first_value(stat, ("ops",))
+        bits.append(f"{slash} OPS {_display(ops)}" if ops is not None else slash)
+    bits.extend(
+        _counting_stats(
+            stat,
+            (
+                ("homeRuns", "HR"),
+                ("rbi", "RBI"),
+                ("runs", "R"),
+                ("hits", "H"),
+                ("stolenBases", "SB"),
+                ("plateAppearances", "PA"),
+                ("baseOnBalls", "BB"),
+                ("strikeOuts", "K"),
+            ),
+        )
+    )
+    return ", ".join(bits)
+
+
+def _format_pitching_stats(stat: dict) -> str:
+    bits: list[str] = []
+    wins = _first_value(stat, ("wins",))
+    losses = _first_value(stat, ("losses",))
+    if wins is not None and losses is not None:
+        bits.append(f"{_display(wins)}-{_display(losses)}")
+    bits.extend(
+        _labeled_stats(
+            stat,
+            (
+                ("era", "ERA"),
+                ("whip", "WHIP"),
+                ("inningsPitched", "IP"),
+                ("strikeOuts", "K"),
+                ("baseOnBalls", "BB"),
+                ("hits", "H"),
+                ("earnedRuns", "ER"),
+                ("homeRuns", "HR"),
+                ("saves", "SV"),
+            ),
+        )
+    )
+    return ", ".join(bits)
+
+
+def _format_fielding_stats(stat: dict) -> str:
+    return ", ".join(
+        _labeled_stats(
+            stat,
+            (
+                ("gamesPlayed", "G"),
+                ("chances", "TC"),
+                ("putOuts", "PO"),
+                ("assists", "A"),
+                ("errors", "E"),
+                ("fielding", "FLD"),
+            ),
+        )
+    )
+
+
+def _prefixed_stats(prefix: str, stat: dict, pairs: tuple) -> str:
+    bits = _labeled_stats(stat, pairs)
+    return f"{prefix}: " + ", ".join(bits) if bits else ""
+
+
+def _format_pitcher_listing(pitcher: PitcherInfo) -> str:
+    return f"{pitcher.full_name} {_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+
+
+def _format_pitcher_game_stats(stat: dict, *, compact: bool = False) -> str:
+    if not stat:
+        return "no game stats yet"
+    pairs = (
+        ("inningsPitched", "IP"),
+        ("hits", "H"),
+        ("runs", "R"),
+        ("earnedRuns", "ER"),
+        ("baseOnBalls", "BB"),
+        ("strikeOuts", "K"),
+        (("pitchesThrown", "numberOfPitches"), "pit"),
+    )
+    bits = _value_labeled_stats(stat, pairs)
+    if not bits:
+        return "no game stats yet"
+    return (" " if compact else ", ").join(bits)
+
+
+def _slash_line(stat: dict, keys: tuple[str, str, str]) -> str:
+    values = [_first_value(stat, (key,)) for key in keys]
+    if not any(value is not None for value in values):
+        return ""
+    return "/".join("-" if value is None else _display(value) for value in values)
+
+
+def _counting_stats(stat: dict, pairs: tuple[tuple[str, str], ...]) -> list[str]:
+    bits: list[str] = []
+    for key, label in pairs:
+        value = _first_value(stat, (key,))
+        if value is not None:
+            bits.append(f"{_display(value)} {label}")
+    return bits
+
+
+def _labeled_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits: list[str] = []
+    for keys, label in pairs:
+        if isinstance(keys, str):
+            keys = (keys,)
+        value = _first_value(stat, keys)
+        if value is not None:
+            bits.append(f"{label} {_display_labeled(value, label)}")
+    return bits
+
+
+def _value_labeled_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits: list[str] = []
+    for keys, label in pairs:
+        if isinstance(keys, str):
+            keys = (keys,)
+        value = _first_value(stat, keys)
+        if value is not None:
+            bits.append(f"{_display(value)} {label}")
+    return bits
+
+
+def _first_value(stat: dict, keys: tuple[str, ...]) -> object | None:
+    for key in keys:
+        value = stat.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _display(value: object) -> str:
+    if isinstance(value, float):
+        return f"{value:.3f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
+def _display_labeled(value: object, label: str) -> str:
+    if not isinstance(value, float):
+        return _display(value)
+    if label in {"WAR", "RA9-WAR", "RAR", "wRAA", "BsR"}:
+        return f"{value:.1f}"
+    if label in {"wRC+", "FIP-", "ERA-"}:
+        return f"{value:.0f}"
+    if label in {"FIP", "xFIP"}:
+        return f"{value:.2f}"
+    if label in {"wOBA", "xwOBA", "xwOBAcon"}:
+        return f"{value:.3f}".lstrip("0")
+    return _display(value)
 
 
 def _compact_time(game: GameSummary, tz: ZoneInfo) -> str:

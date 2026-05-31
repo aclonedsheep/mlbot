@@ -21,6 +21,7 @@ class FakeClient:
         self.schedule_calls = []
         self.standings_calls = []
         self.leader_calls = []
+        self.stats_calls = []
         self.games = games
 
     async def get_schedule(
@@ -96,13 +97,49 @@ class FakeClient:
         return records
 
     async def search_people(self, name: str):
+        if name.lower() == "shohei ohtani":
+            return [PlayerSearchResult(660271, "Shohei Ohtani", "Los Angeles Dodgers", "DH", True)]
         return [
             PlayerSearchResult(1, "John Smith", "A Team", "P", True),
             PlayerSearchResult(2, "John Smith Jr.", "B Team", "CF", True),
         ]
 
-    async def get_player_stats(self, player: PlayerSearchResult, *, group: str, season: int):
-        return PlayerStats(player, group, season, {"avg": ".300", "homeRuns": 12, "rbi": 40})
+    async def get_player_stats(
+        self,
+        player: PlayerSearchResult,
+        *,
+        group: str,
+        season: int,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ):
+        self.stats_calls.append((player.full_name, group, season, start_date, end_date))
+        if start_date and end_date:
+            return PlayerStats(
+                player,
+                group,
+                season,
+                {"avg": ".286", "obp": ".400", "slg": ".619", "ops": "1.019", "homeRuns": 2},
+                advanced_stats={"iso": ".333", "strikeoutsPerPlateAppearance": ".200"},
+                start_date=start_date,
+                end_date=end_date,
+            )
+        return PlayerStats(
+            player,
+            group,
+            season,
+            {
+                "avg": ".300",
+                "obp": ".390",
+                "slg": ".600",
+                "ops": ".990",
+                "homeRuns": 12,
+                "rbi": 40,
+            },
+            advanced_stats={"babip": ".330", "iso": ".300"},
+            sabermetric_stats={"wRcPlus": 165, "war": 2.4},
+            expected_stats={"avg": ".310", "slg": ".640", "woba": ".420"},
+        )
 
     async def get_leaders(self, category: str, *, season: int, limit: int):
         self.leader_calls.append((category, season, limit))
@@ -168,7 +205,10 @@ async def test_mlb_pitcher_shows_current_team_pitcher() -> None:
 
     replies = await router.handle_message("@mlbpitcher TOR")
 
-    assert replies == ["TOR game pitcher: TOR Spencer Miles (TOR vs BAL, In Progress)"]
+    assert replies == [
+        "TOR game pitcher: TOR Spencer Miles - 2.1 IP, 3 H, 1 R, 1 ER, "
+        "1 BB, 4 K, 46 pit (TOR vs BAL, In Progress)"
+    ]
 
 
 @pytest.mark.asyncio
@@ -179,7 +219,9 @@ async def test_mlb_pitchers_shows_all_game_pitchers() -> None:
     replies = await router.handle_message("@mlbpitchers TOR")
 
     assert replies == [
-        "Pitchers: TOR: Spencer Miles, Reliever One | BAL: Kyle Bradish",
+        "Pitchers: TOR: Spencer Miles 2.1 IP 3 H 1 R 1 ER 1 BB 4 K 46 pit; "
+        "Reliever One 0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit | "
+        "BAL: Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit",
     ]
 
 
@@ -228,6 +270,37 @@ async def test_sstats_returns_candidates_for_ambiguous_player() -> None:
 
     assert replies == [
         "Multiple players matched: John Smith (A Team, P); John Smith Jr. (B Team, CF)"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sstats_formats_advanced_season_stats() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@sstats Shohei Ohtani")
+
+    assert client.stats_calls == [("Shohei Ohtani", "hitting", 2026, None, None)]
+    assert replies == [
+        "Shohei Ohtani 2026 hitting: .300/.390/.600 OPS .990, 12 HR, 40 RBI | "
+        "adv: BABIP .330, ISO .300 | sabr: wRC+ 165, WAR 2.4 | "
+        "exp: xAVG .310, xSLG .640, xwOBA .420"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sstats_accepts_day_window() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@sstats Shohei Ohtani hitting 7 days")
+
+    assert client.stats_calls == [
+        ("Shohei Ohtani", "hitting", 2026, date(2026, 5, 25), date(2026, 5, 31))
+    ]
+    assert replies == [
+        "Shohei Ohtani last 7 days hitting: .286/.400/.619 OPS 1.019, 2 HR | "
+        "adv: ISO .333, K/PA .200"
     ]
 
 
@@ -333,10 +406,32 @@ def _live_detail() -> GameDetail:
                                     "position": {"abbreviation": "DH"},
                                 },
                                 "ID693686": {
-                                    "person": {"id": 693686, "fullName": "Spencer Miles"}
+                                    "person": {"id": 693686, "fullName": "Spencer Miles"},
+                                    "stats": {
+                                        "pitching": {
+                                            "inningsPitched": "2.1",
+                                            "hits": 3,
+                                            "runs": 1,
+                                            "earnedRuns": 1,
+                                            "baseOnBalls": 1,
+                                            "strikeOuts": 4,
+                                            "pitchesThrown": 46,
+                                        }
+                                    },
                                 },
                                 "ID123456": {
-                                    "person": {"id": 123456, "fullName": "Reliever One"}
+                                    "person": {"id": 123456, "fullName": "Reliever One"},
+                                    "stats": {
+                                        "pitching": {
+                                            "inningsPitched": "0.2",
+                                            "hits": 0,
+                                            "runs": 0,
+                                            "earnedRuns": 0,
+                                            "baseOnBalls": 0,
+                                            "strikeOuts": 1,
+                                            "pitchesThrown": 12,
+                                        }
+                                    },
                                 },
                             },
                         },
@@ -346,7 +441,18 @@ def _live_detail() -> GameDetail:
                             "pitchers": [680694],
                             "players": {
                                 "ID680694": {
-                                    "person": {"id": 680694, "fullName": "Kyle Bradish"}
+                                    "person": {"id": 680694, "fullName": "Kyle Bradish"},
+                                    "stats": {
+                                        "pitching": {
+                                            "inningsPitched": "3.0",
+                                            "hits": 2,
+                                            "runs": 1,
+                                            "earnedRuns": 1,
+                                            "baseOnBalls": 2,
+                                            "strikeOuts": 5,
+                                            "pitchesThrown": 58,
+                                        }
+                                    },
                                 }
                             },
                         },

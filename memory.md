@@ -42,3 +42,11 @@
 - Reproduction: joined `#mlbtest` from the VPS as a temporary IRC client and confirmed `@wildcard` emitted `Wildcard`, then AL/NL lines were delayed into later command windows.
 - Decisions: keep command replies to one IRC message for standings, wildcard, game detail, pitcher lists, and schedule output to avoid server/client throttling interleaving.
 - Verification: Python 3.12.13 `pytest` passes with 17 tests; `ruff check .` passes.
+
+## 2026-05-31 - Iteration 6: Pitcher Lines And Rich Player Stats
+
+- Goal: add game pitching lines to `@mlbpitcher`/`@mlbpitchers`, improve `@sstats` formatting, and support recent stat windows such as `7 days`, `14 days`, and `30 days`.
+- Decisions: pull pitcher game stats from live-feed boxscore player records; keep `@sstats` on MLB Stats API direct calls and request optional `seasonAdvanced`, `sabermetrics`, `expectedStatistics`, and date-range advanced payloads.
+- API finding: live probes confirmed MLB Stats API exposes public sabermetric fields including WAR/wRC+/FIP and expected-stat fields including expected AVG/SLG/wOBA-style values; complete Baseball Savant/Statcast metrics may still need a separate source.
+- Commands: `@sstats <player> [group] [season] [N days]` now maps day windows to `byDateRange`/`byDateRangeAdvanced`; existing season requests include basic, advanced, sabermetric, and expected sections when available.
+- Verification: Python 3.12.13 `pytest` passes with 20 tests; `ruff check .` passes; live client smoke test returned formatted Ohtani hitting season/recent stats and Skubal pitching season stats.

@@ -13,6 +13,23 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Game live feed: `/api/v1.1/game/{gamePk}/feed/live`, with `/api/v1/...` fallback
 - Game fallback data: `/api/v1/game/{gamePk}/linescore`, `/boxscore`, `/playByPlay`
 
+## Player Stat Types
+
+Live probes on 2026-05-31 showed the player stats endpoint accepting these useful `stats`
+values:
+
+- `season`: normal season totals and rates.
+- `seasonAdvanced`: advanced rates such as ISO, BABIP, K/PA, BB/PA, K/9, BB/9, and whiff percentage.
+- `sabermetrics`: public MLB Stats API sabermetric fields including WAR, wRC+, FIP, xFIP, and related run-value fields when available.
+- `expectedStatistics`: expected-stat fields such as expected AVG, SLG, and wOBA-style values when available.
+- `byDateRange` and `byDateRangeAdvanced`: date-window basic and advanced stats using `startDate` and `endDate`.
+
+The bot treats advanced, sabermetric, and expected-stat responses as optional because
+support can vary by group, player, date range, and future API changes. A separate paid API
+is not required for the MLB Stats API WAR and expected-stat fields above, but complete
+Baseball Savant/Statcast-style expected metrics may require Baseball Savant CSV endpoints
+or another data source and should be considered less stable.
+
 ## Hydrate Probe
 
 Planning probe on 2026-05-31:

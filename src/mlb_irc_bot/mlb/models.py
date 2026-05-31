@@ -68,6 +68,7 @@ class PitcherInfo:
     player_id: int | None
     full_name: str
     team: TeamInfo
+    game_stats: JsonDict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,11 @@ class PlayerStats:
     group: str
     season: int
     stats: JsonDict
+    advanced_stats: JsonDict = field(default_factory=dict)
+    sabermetric_stats: JsonDict = field(default_factory=dict)
+    expected_stats: JsonDict = field(default_factory=dict)
+    start_date: date | None = None
+    end_date: date | None = None
 
 
 @dataclass(frozen=True)

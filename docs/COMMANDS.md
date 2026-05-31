@@ -25,8 +25,8 @@ Examples:
 
 ## Game Details
 
-- `@mlbpitcher TEAM`: current pitcher for that team's game.
-- `@mlbpitchers TEAM`: all pitchers used in that team's game.
+- `@mlbpitcher TEAM`: current pitcher for that team's game, with game stats.
+- `@mlbpitchers TEAM`: all pitchers used in that team's game, with game stats.
 - `@mlblineup TEAM`: posted lineup for that team, or a message if unavailable.
 
 Examples:
@@ -49,7 +49,7 @@ Examples:
 
 ## Stats
 
-- `@sstats <player name> [hitting|pitching|fielding] [season]`: season stats.
+- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]`: season stats or recent date-range stats.
 - `@leaders <category> [limit]`: stat leaders.
 
 Examples:
@@ -57,6 +57,8 @@ Examples:
 ```text
 @sstats Shohei Ohtani hitting
 @sstats Tarik Skubal pitching 2025
+@sstats Shohei Ohtani hitting 7 days
+@sstats Aaron Judge 30 days
 @leaders homeRuns 5
 ```
 
