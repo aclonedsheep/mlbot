@@ -11,6 +11,9 @@ from mlb_irc_bot.mlb.models import (
     StandingTeam,
     TeamLineup,
     TeamPitchers,
+    TeamStats,
+    Transaction,
+    WinProbability,
 )
 
 MAX_IRC_LEN = 390
@@ -75,9 +78,19 @@ def format_game_summary(game: GameSummary, tz: ZoneInfo) -> str:
     return f"{matchup}: {when}{venue}{probables}"
 
 
-def format_game_detail(detail: GameDetail, tz: ZoneInfo) -> list[str]:
+def format_game_detail(
+    detail: GameDetail,
+    tz: ZoneInfo,
+    *,
+    win_probability: WinProbability | None = None,
+    active_pitchers: list[PitcherInfo] | None = None,
+) -> list[str]:
     game = detail.summary
     line = format_game_summary(game, tz)
+    if win_probability:
+        line += f" | Win: {_format_win_probability(win_probability)}"
+    if active_pitchers:
+        line += f" | P: {_format_active_pitchers(active_pitchers)}"
     if detail.last_play:
         line += f" | Last play: {detail.last_play}"
     return [_truncate(line)]
@@ -184,6 +197,60 @@ def format_leaders(category: str, leaders: list[Leader]) -> str:
     return _truncate(f"{category} leaders: " + "; ".join(bits))
 
 
+def format_boxscore(detail: GameDetail, pitcher_groups: list[TeamPitchers]) -> str:
+    game = detail.summary
+    away_line = _team_box_line(detail, "away")
+    home_line = _team_box_line(detail, "home")
+    state = "F" if game.is_final else (format_linescore(game) or game.detailed_state)
+    bits = [
+        f"Box {game.away.abbreviation} {away_line}, "
+        f"{game.home.abbreviation} {home_line} {state}".strip()
+    ]
+    left_on_base = _left_on_base(detail)
+    if left_on_base:
+        bits.append("LOB " + left_on_base)
+    pitcher_bits = _box_pitcher_bits(pitcher_groups)
+    if pitcher_bits:
+        bits.append("Pitching: " + "; ".join(pitcher_bits))
+    return _truncate(" | ".join(bits))
+
+
+def format_team_stats(stats_list: list[TeamStats]) -> str:
+    if not stats_list:
+        return "No team stats found."
+    team = stats_list[0].team
+    period = _team_stat_period(stats_list[0])
+    sections = []
+    for stats in stats_list:
+        if not stats.stats:
+            continue
+        prefix = "hit" if stats.group == "hitting" else "pitch"
+        if stats.group == "pitching":
+            section = _format_team_pitching_stats(stats.stats)
+        else:
+            section = _format_team_hitting_stats(stats.stats)
+        if section:
+            sections.append(f"{prefix}: {section}")
+    if not sections:
+        return f"No team stats found for {team.abbreviation} {period}."
+    return _truncate(f"{team.abbreviation} teamstats {period}: " + " | ".join(sections))
+
+
+def format_transactions(
+    transactions: list[Transaction],
+    *,
+    title: str,
+    limit: int = 5,
+) -> str:
+    if not transactions:
+        return f"{title}: no transactions found."
+    display = transactions[:limit]
+    bits = [_transaction_bit(transaction) for transaction in display]
+    if len(transactions) > limit:
+        bits.append(f"+{len(transactions) - limit} more")
+    return _truncate(f"{title}: " + "; ".join(bits))
+
+
 def format_current_pitcher(
     game: GameSummary, requested_abbreviation: str, pitcher: PitcherInfo | None
 ) -> str:
@@ -236,6 +303,150 @@ def format_lineup(lineup: TeamLineup | None, game: GameSummary, requested_abbrev
         for entry in lineup.entries
     ]
     return _truncate(f"{lineup.team.abbreviation} lineup: " + "; ".join(bits))
+
+
+def _format_win_probability(win_probability: WinProbability) -> str:
+    values = [
+        (win_probability.away.abbreviation, win_probability.away_probability),
+        (win_probability.home.abbreviation, win_probability.home_probability),
+    ]
+    values = [(team, probability) for team, probability in values if probability is not None]
+    total = sum(probability for _, probability in values)
+    scale = 100 if values and total <= 1.01 else 1
+    values = [(team, probability * scale) for team, probability in values]
+    values.sort(key=lambda item: item[1], reverse=True)
+    return ", ".join(f"{team} {_format_percent(probability)}" for team, probability in values)
+
+
+def _format_active_pitchers(pitchers: list[PitcherInfo]) -> str:
+    return "; ".join(
+        f"{pitcher.team.abbreviation} {pitcher.full_name} "
+        f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+        for pitcher in pitchers
+    )
+
+
+def _team_box_line(detail: GameDetail, side: str) -> str:
+    team_line = ((_raw_linescore(detail).get("teams") or {}).get(side) or {})
+    runs = _display(team_line.get("runs", 0))
+    hits = _display(team_line.get("hits", 0))
+    errors = _display(team_line.get("errors", 0))
+    return f"{runs}-{hits}-{errors}"
+
+
+def _left_on_base(detail: GameDetail) -> str:
+    linescore_teams = _raw_linescore(detail).get("teams") or {}
+    away_lob = (linescore_teams.get("away") or {}).get("leftOnBase")
+    home_lob = (linescore_teams.get("home") or {}).get("leftOnBase")
+    if away_lob is None and home_lob is None:
+        box_teams = _raw_boxscore(detail).get("teams") or {}
+        away_lob = (
+            ((box_teams.get("away") or {}).get("teamStats") or {})
+            .get("batting", {})
+            .get("leftOnBase")
+        )
+        home_lob = (
+            ((box_teams.get("home") or {}).get("teamStats") or {})
+            .get("batting", {})
+            .get("leftOnBase")
+        )
+    if away_lob is None and home_lob is None:
+        return ""
+    game = detail.summary
+    return (
+        f"{game.away.abbreviation} {_display(away_lob or 0)}, "
+        f"{game.home.abbreviation} {_display(home_lob or 0)}"
+    )
+
+
+def _box_pitcher_bits(groups: list[TeamPitchers]) -> list[str]:
+    bits: list[str] = []
+    for group in groups:
+        if not group.pitchers:
+            continue
+        pitcher = group.pitchers[-1]
+        bits.append(
+            f"{group.team.abbreviation} {pitcher.full_name} "
+            f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+        )
+    return bits
+
+
+def _raw_linescore(detail: GameDetail) -> dict:
+    return (
+        (detail.raw.get("liveData") or {}).get("linescore")
+        or detail.raw.get("linescore")
+        or {}
+    )
+
+
+def _raw_boxscore(detail: GameDetail) -> dict:
+    return (
+        (detail.raw.get("liveData") or {}).get("boxscore")
+        or detail.raw.get("boxscore")
+        or {}
+    )
+
+
+def _team_stat_period(stats: TeamStats) -> str:
+    if stats.start_date and stats.end_date:
+        days = (stats.end_date - stats.start_date).days + 1
+        return f"last {days} days"
+    return str(stats.season)
+
+
+def _format_team_hitting_stats(stat: dict) -> str:
+    bits = []
+    slash = _slash_line(stat, ("avg", "obp", "slg"))
+    if slash:
+        ops = _first_value(stat, ("ops",))
+        bits.append(f"{slash} OPS {_display(ops)}" if ops is not None else slash)
+    bits.extend(
+        _counting_stats(
+            stat,
+            (
+                ("runs", "R"),
+                ("homeRuns", "HR"),
+                ("hits", "H"),
+                ("stolenBases", "SB"),
+                ("strikeOuts", "K"),
+                ("baseOnBalls", "BB"),
+            ),
+        )
+    )
+    return ", ".join(bits)
+
+
+def _format_team_pitching_stats(stat: dict) -> str:
+    bits = _labeled_stats(
+        stat,
+        (
+            ("era", "ERA"),
+            ("whip", "WHIP"),
+            ("inningsPitched", "IP"),
+            ("strikeOuts", "K"),
+            ("baseOnBalls", "BB"),
+            ("homeRuns", "HR"),
+            ("strikeoutWalkRatio", "K/BB"),
+        ),
+    )
+    return ", ".join(bits)
+
+
+def _transaction_bit(transaction: Transaction) -> str:
+    if transaction.description:
+        bit = transaction.description
+    else:
+        team = transaction.to_team or transaction.from_team
+        team_label = f"{team.abbreviation}: " if team else ""
+        bit = f"{team_label}{transaction.player_name} {transaction.type_description}".strip()
+    return _truncate_piece(bit, 105)
+
+
+def _format_percent(value: float) -> str:
+    if 0 < value < 1:
+        return f"{value:.1f}%"
+    return f"{value:.0f}%"
 
 
 def _probables(game: GameSummary) -> str:
@@ -528,3 +739,9 @@ def _truncate(value: str) -> str:
     if len(value) <= MAX_IRC_LEN:
         return value
     return value[: MAX_IRC_LEN - 1].rstrip() + "..."
+
+
+def _truncate_piece(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1].rstrip() + "..."

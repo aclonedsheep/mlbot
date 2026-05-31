@@ -66,3 +66,11 @@
 - Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 23 tests; `ruff check .` passes.
 - Live IRC smoke: after VPS deploy, a validated sweep in `#mlbtest` passed 23/23 command checks covering help, `@mlb`, `@mlb *`, team/date/game lookup, standings, wildcard, pitcher-default `@sstats`, leaders, pitcher lines, and lineups.
 - Follow-ups noticed: all-league standings can truncate; `@help` top-level could advertise `@mlb *`; detailed game lookup could include game id and last play more consistently.
+
+## 2026-05-31 - Iteration 9: Boxscores, Win Probability, Team Stats, Transactions
+
+- Goal: add `@box`, enrich live `@mlb TEAM` with win probability and active pitchers, and add `@teamstats` plus `@transactions`.
+- Decisions: use `/game/{gamePk}/contextMetrics` for current win probability, `/teams/{teamId}/stats` for team season/date-range stats, `/transactions` for league/team moves, and existing live feed boxscore/linescore data for compact R-H-E boxscore output.
+- Commands: added `@box TEAM [today|yesterday]`, `@box game GAMEPK`, `@teamstats TEAM [hitting|pitching] [season] [N days]`, and `@transactions [TEAM] [today|yesterday|N days|YYYY-MM-DD]`.
+- Formatting: live `@mlb TEAM` now appends `Win:` and `P:` sections before last play; win probability handles MLB percentage-point decimals such as `0.9` as `0.9%`, not `90%`.
+- Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 29 tests; `ruff check .` passes; live client smoke covered enriched `@mlb TEAM`, `@box`, `@teamstats`, and `@transactions`.

@@ -78,6 +78,14 @@ class TeamPitchers:
 
 
 @dataclass(frozen=True)
+class WinProbability:
+    away: TeamInfo
+    home: TeamInfo
+    away_probability: float | None = None
+    home_probability: float | None = None
+
+
+@dataclass(frozen=True)
 class LineupEntry:
     order: int
     player_id: int | None
@@ -130,6 +138,27 @@ class PlayerStats:
     expected_stats: JsonDict = field(default_factory=dict)
     start_date: date | None = None
     end_date: date | None = None
+
+
+@dataclass(frozen=True)
+class TeamStats:
+    team: TeamInfo
+    group: str
+    season: int
+    stats: JsonDict
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+@dataclass(frozen=True)
+class Transaction:
+    transaction_id: int | None
+    date: date | None
+    player_name: str
+    type_description: str
+    description: str
+    from_team: TeamInfo | None = None
+    to_team: TeamInfo | None = None
 
 
 @dataclass(frozen=True)

@@ -12,6 +12,9 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Player stats: `/api/v1/people/{personId}/stats`
 - Game live feed: `/api/v1.1/game/{gamePk}/feed/live`, with `/api/v1/...` fallback
 - Game fallback data: `/api/v1/game/{gamePk}/linescore`, `/boxscore`, `/playByPlay`
+- Game context metrics: `/api/v1/game/{gamePk}/contextMetrics` for live win probability.
+- Team stats: `/api/v1/teams/{teamId}/stats` with `season`, `group`, `stats`, and optional date range.
+- Transactions: `/api/v1/transactions` with `sportId`, `teamId`, `startDate`, and `endDate`.
 
 ## Player Stat Types
 

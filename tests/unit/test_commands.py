@@ -13,6 +13,9 @@ from mlb_irc_bot.mlb.models import (
     PlayerStats,
     StandingTeam,
     TeamInfo,
+    TeamStats,
+    Transaction,
+    WinProbability,
 )
 
 
@@ -22,6 +25,8 @@ class FakeClient:
         self.standings_calls = []
         self.leader_calls = []
         self.stats_calls = []
+        self.team_stats_calls = []
+        self.transaction_calls = []
         self.games = games
 
     async def get_schedule(
@@ -52,6 +57,14 @@ class FakeClient:
 
     async def get_game_detail(self, game_pk: int) -> GameDetail:
         return _live_detail()
+
+    async def get_win_probability(self, game_pk: int) -> WinProbability:
+        return WinProbability(
+            away=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
+            home=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
+            away_probability=0.9,
+            home_probability=99.1,
+        )
 
     async def get_standings(self, *, season: int, standings_type: str, league: str | None):
         self.standings_calls.append((season, standings_type, league))
@@ -164,6 +177,78 @@ class FakeClient:
         self.leader_calls.append((category, season, limit))
         return [Leader(rank="1", value="20", player_name="Slugger", team_name="Club")]
 
+    async def get_team_stats(
+        self,
+        team: TeamInfo,
+        *,
+        group: str,
+        season: int,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ):
+        self.team_stats_calls.append((team.abbreviation, group, season, start_date, end_date))
+        if group == "pitching":
+            return TeamStats(
+                team,
+                group,
+                season,
+                {
+                    "era": "3.50",
+                    "whip": "1.20",
+                    "inningsPitched": "60.0",
+                    "strikeOuts": 70,
+                    "baseOnBalls": 20,
+                    "homeRuns": 8,
+                    "strikeoutWalkRatio": "3.50",
+                },
+                start_date=start_date,
+                end_date=end_date,
+            )
+        return TeamStats(
+            team,
+            group,
+            season,
+            {
+                "avg": ".250",
+                "obp": ".320",
+                "slg": ".410",
+                "ops": ".730",
+                "runs": 42,
+                "homeRuns": 11,
+                "hits": 80,
+                "stolenBases": 6,
+            },
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    async def get_transactions(
+        self,
+        *,
+        start_date: date,
+        end_date: date,
+        team_id: int | None = None,
+    ):
+        self.transaction_calls.append((start_date, end_date, team_id))
+        return [
+            Transaction(
+                transaction_id=1,
+                date=end_date,
+                player_name="Player One",
+                type_description="Status Change",
+                description="Toronto Blue Jays activated RHP Player One from the injured list.",
+                to_team=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
+            ),
+            Transaction(
+                transaction_id=2,
+                date=end_date,
+                player_name="Player Two",
+                type_description="Assigned",
+                description="Toronto Blue Jays optioned RHP Player Two to Buffalo Bisons.",
+                from_team=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
+            ),
+        ]
+
 
 def settings() -> SimpleNamespace:
     return SimpleNamespace(command_prefix="@", zoneinfo=lambda: ZoneInfo("America/New_York"))
@@ -215,6 +300,34 @@ async def test_mlb_star_reports_no_live_games() -> None:
     replies = await router.handle_message("@mlb *")
 
     assert replies == ["MLB live: no games live."]
+
+
+@pytest.mark.asyncio
+async def test_mlb_live_team_includes_win_probability_and_active_pitchers() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@mlb TOR")
+
+    assert replies == [
+        "TOR @ BAL: TOR 1, BAL 2 Top 3, 1 out | Win: BAL 99%, TOR 0.9% | "
+        "P: TOR Spencer Miles 2.1 IP 3 H 1 R 1 ER 1 BB 4 K 46 pit; "
+        "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_box_returns_compact_boxscore() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@box TOR")
+
+    assert replies == [
+        "Box TOR 1-4-0, BAL 2-5-1 Top 3, 1 out | LOB TOR 3, BAL 4 | "
+        "Pitching: TOR Reliever One 0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit; "
+        "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit"
+    ]
 
 
 @pytest.mark.asyncio
@@ -359,6 +472,66 @@ async def test_leaders_normalizes_category_alias() -> None:
     assert replies == ["homeRuns leaders: 1. Slugger 20 (Club)"]
 
 
+@pytest.mark.asyncio
+async def test_teamstats_defaults_to_hitting_and_pitching() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@teamstats TOR")
+
+    assert client.team_stats_calls == [
+        ("TOR", "hitting", 2026, None, None),
+        ("TOR", "pitching", 2026, None, None),
+    ]
+    assert replies == [
+        "TOR teamstats 2026: hit: .250/.320/.410 OPS .730, 42 R, 11 HR, "
+        "80 H, 6 SB | pitch: ERA 3.50, WHIP 1.20, IP 60.0, K 70, "
+        "BB 20, HR 8, K/BB 3.50"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_teamstats_accepts_group_and_day_window() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@teamstats TOR hitting 7 days")
+
+    assert client.team_stats_calls == [
+        ("TOR", "hitting", 2026, date(2026, 5, 25), date(2026, 5, 31))
+    ]
+    assert replies == [
+        "TOR teamstats last 7 days: hit: .250/.320/.410 OPS .730, 42 R, "
+        "11 HR, 80 H, 6 SB"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_transactions_defaults_to_today() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@transactions")
+
+    assert client.transaction_calls == [(date(2026, 5, 31), date(2026, 5, 31), None)]
+    assert replies == [
+        "MLB transactions 2026-05-31: "
+        "Toronto Blue Jays activated RHP Player One from the injured list.; "
+        "Toronto Blue Jays optioned RHP Player Two to Buffalo Bisons."
+    ]
+
+
+@pytest.mark.asyncio
+async def test_transactions_accepts_team_and_day_window() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@transactions TOR 7 days")
+
+    assert client.transaction_calls == [(date(2026, 5, 25), date(2026, 5, 31), 141)]
+    assert replies[0].startswith("TOR transactions 2026-05-25..2026-05-31:")
+
+
 def _live_game() -> GameSummary:
     return GameSummary(
         game_pk=824832,
@@ -422,6 +595,10 @@ def _live_detail() -> GameDetail:
             },
             "liveData": {
                 "linescore": {
+                    "teams": {
+                        "away": {"runs": 1, "hits": 4, "errors": 0, "leftOnBase": 3},
+                        "home": {"runs": 2, "hits": 5, "errors": 1, "leftOnBase": 4},
+                    },
                     "offense": {
                         "team": {"id": 141, "name": "Toronto Blue Jays"},
                         "pitcher": {"id": 693686, "fullName": "Spencer Miles"},

@@ -19,6 +19,9 @@ from mlb_irc_bot.mlb.models import (
     TeamInfo,
     TeamLineup,
     TeamPitchers,
+    TeamStats,
+    Transaction,
+    WinProbability,
 )
 from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY
 
@@ -168,6 +171,23 @@ class MLBStatsClient:
                 )
         return records
 
+    async def get_win_probability(self, game_pk: int) -> WinProbability | None:
+        payload = await self._get(f"/v1/game/{game_pk}/contextMetrics")
+        game = payload.get("game") or {}
+        teams = game.get("teams") or {}
+        away = _team_from_wrapper(teams.get("away") or {})
+        home = _team_from_wrapper(teams.get("home") or {})
+        away_probability = _optional_float(payload.get("awayWinProbability"))
+        home_probability = _optional_float(payload.get("homeWinProbability"))
+        if away_probability is None and home_probability is None:
+            return None
+        return WinProbability(
+            away=away,
+            home=home,
+            away_probability=away_probability,
+            home_probability=home_probability,
+        )
+
     async def search_people(self, name: str) -> list[PlayerSearchResult]:
         payload = await self._get("/v1/people/search", params={"names": name})
         return [
@@ -285,6 +305,69 @@ class MLBStatsClient:
                     )
                 )
         return leaders[:limit]
+
+    async def get_team_stats(
+        self,
+        team: TeamInfo,
+        *,
+        group: str,
+        season: int,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> TeamStats:
+        if team.id is None:
+            raise ValueError(f"missing MLB team id for {team.abbreviation}")
+        if (start_date is None) != (end_date is None):
+            raise ValueError("start_date and end_date must be supplied together")
+
+        params: dict[str, Any] = {
+            "season": season,
+            "group": group,
+            "stats": "season",
+            "gameType": "R",
+        }
+        if start_date and end_date:
+            params["stats"] = "byDateRange"
+            params["startDate"] = start_date.isoformat()
+            params["endDate"] = end_date.isoformat()
+        payload = await self._get(f"/v1/teams/{team.id}/stats", params=params)
+        stat = _best_stat_split(payload)
+        return TeamStats(
+            team=team,
+            group=group,
+            season=season,
+            stats=stat,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    async def get_transactions(
+        self,
+        *,
+        start_date: date,
+        end_date: date,
+        team_id: int | None = None,
+    ) -> list[Transaction]:
+        params: dict[str, Any] = {
+            "sportId": 1,
+            "startDate": start_date.isoformat(),
+            "endDate": end_date.isoformat(),
+        }
+        if team_id is not None:
+            params["teamId"] = team_id
+        payload = await self._get("/v1/transactions", params=params)
+        transactions = [
+            _parse_transaction(transaction)
+            for transaction in payload.get("transactions") or ()
+        ]
+        return sorted(
+            transactions,
+            key=lambda item: (
+                item.date or date.min,
+                item.transaction_id or 0,
+            ),
+            reverse=True,
+        )
 
     async def available_schedule_hydrations(self, target_date: date) -> list[str]:
         payload = await self._get(
@@ -425,6 +508,23 @@ def current_pitcher_for_team(detail: GameDetail, team_id: int) -> PitcherInfo | 
     return None
 
 
+def active_pitchers(detail: GameDetail) -> list[PitcherInfo]:
+    pitchers: list[PitcherInfo] = []
+    seen: set[int] = set()
+    for team_id in (detail.summary.away.id, detail.summary.home.id):
+        if team_id is None:
+            continue
+        pitcher = current_pitcher_for_team(detail, team_id)
+        if pitcher is None:
+            continue
+        dedupe_id = pitcher.player_id or id(pitcher)
+        if dedupe_id in seen:
+            continue
+        seen.add(dedupe_id)
+        pitchers.append(pitcher)
+    return pitchers
+
+
 def pitchers_by_team(detail: GameDetail) -> list[TeamPitchers]:
     teams = _raw_boxscore(detail.raw).get("teams") or {}
     team_pitchers: list[TeamPitchers] = []
@@ -538,6 +638,26 @@ def _team_from_team(team: JsonDict) -> TeamInfo:
     )
 
 
+def _parse_transaction(transaction: JsonDict) -> Transaction:
+    return Transaction(
+        transaction_id=_optional_int(transaction.get("id")),
+        date=_parse_date(transaction.get("date")),
+        player_name=_name(transaction.get("person")),
+        type_description=str(transaction.get("typeDesc") or ""),
+        description=str(transaction.get("description") or ""),
+        from_team=(
+            _team_from_team(transaction["fromTeam"])
+            if transaction.get("fromTeam")
+            else None
+        ),
+        to_team=(
+            _team_from_team(transaction["toTeam"])
+            if transaction.get("toTeam")
+            else None
+        ),
+    )
+
+
 def _parse_linescore(data: JsonDict) -> LinescoreSnapshot | None:
     if not data:
         return None
@@ -582,6 +702,12 @@ def _optional_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    return float(value)
 
 
 def _int(value: Any) -> int:

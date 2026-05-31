@@ -8,7 +8,7 @@ The bot listens for commands beginning with `@` by default.
 - `@mlb *`: live games only.
 - `@mlb tomorrow`: tomorrow's MLB schedule in one compact message.
 - `@mlb yesterday`: yesterday's final scores.
-- `@mlb TEAM`: today's game for a team abbreviation or alias.
+- `@mlb TEAM`: today's game for a team abbreviation or alias. Live games include win probability and active pitchers.
 - `@mlb TEAM tomorrow`: tomorrow's game for a team.
 - `@mlb TEAM yesterday`: previous day result for a team.
 - `@mlb game GAMEPK`: details for one MLB game id.
@@ -25,6 +25,8 @@ Examples:
 
 ## Game Details
 
+- `@box TEAM [today|yesterday]`: compact R-H-E boxscore for a team's game.
+- `@box game GAMEPK`: compact R-H-E boxscore for one MLB game id.
 - `@mlbpitcher TEAM`: current pitcher for that team's game, with game stats.
 - `@mlbpitchers TEAM`: all pitchers used in that team's game, with game stats.
 - `@mlblineup TEAM`: posted lineup for that team, or a message if unavailable.
@@ -32,6 +34,8 @@ Examples:
 Examples:
 
 ```text
+@box NYY
+@box game 824832
 @mlbpitcher NYY
 @mlbpitchers LAD
 @mlblineup SEA
@@ -50,6 +54,8 @@ Examples:
 ## Stats
 
 - `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]`: season stats or recent date-range stats. Pitchers default to pitching stats; everyone else defaults to hitting.
+- `@teamstats TEAM [hitting|pitching] [season] [7 days|14 days|30 days]`: team hitting and/or pitching stats.
+- `@transactions [TEAM] [today|yesterday|7 days|YYYY-MM-DD]`: recent MLB or team transactions.
 - `@leaders <category> [limit]`: stat leaders.
 
 Examples:
@@ -60,6 +66,10 @@ Examples:
 @sstats Tarik Skubal pitching 2025
 @sstats Shohei Ohtani hitting 7 days
 @sstats Aaron Judge 30 days
+@teamstats TOR
+@teamstats LAD pitching 14 days
+@transactions
+@transactions TOR 7 days
 @leaders homeRuns 5
 ```
 
