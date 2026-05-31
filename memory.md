@@ -26,3 +26,11 @@
 - Added `mlb-api-probe` for opt-in live MLB API drift checks without making normal tests depend on the network.
 - Verification: Python 3.12.13 `pytest` passes with 11 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes; `python -m mlb_irc_bot.probe --help` passes; `compileall src tests` passes.
 - Verification gap: Docker Compose config was not run because Docker is not installed on this machine.
+
+## 2026-05-31 - Iteration 4: Compact MLB Output And Game Detail Commands
+
+- Goal: make `@mlb` compact, add live-only `@mlb *`, and add pitcher/lineup commands.
+- Decisions: use `/api/v1.1/game/{gamePk}/feed/live` before the older v1 endpoint; keep team-specific `@mlb TEAM` detailed while making date schedule output single-message and compact.
+- Commands: added `@mlbpitcher TEAM`, `@mlbpitchers TEAM`, and `@mlblineup TEAM`.
+- Data parsing: added helpers for current pitcher, game pitcher lists, and posted lineups from live feed boxscore/linescore data.
+- Verification: Python 3.12.13 `pytest` passes with 17 tests; `ruff check .` passes.

@@ -10,7 +10,7 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Wildcard standings: `/api/v1/standings?leagueId=103,104&season=YYYY&standingsTypes=wildCard`
 - Player search: `/api/v1/people/search`
 - Player stats: `/api/v1/people/{personId}/stats`
-- Game live feed: `/api/v1/game/{gamePk}/feed/live`
+- Game live feed: `/api/v1.1/game/{gamePk}/feed/live`, with `/api/v1/...` fallback
 - Game fallback data: `/api/v1/game/{gamePk}/linescore`, `/boxscore`, `/playByPlay`
 
 ## Hydrate Probe

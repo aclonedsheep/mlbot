@@ -11,10 +11,14 @@ from mlb_irc_bot.mlb.models import (
     JsonDict,
     Leader,
     LinescoreSnapshot,
+    LineupEntry,
+    PitcherInfo,
     PlayerSearchResult,
     PlayerStats,
     StandingTeam,
     TeamInfo,
+    TeamLineup,
+    TeamPitchers,
 )
 from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY
 
@@ -96,21 +100,24 @@ class MLBStatsClient:
         return self._parse_schedule_game(games[0]) if games else None
 
     async def get_game_detail(self, game_pk: int) -> GameDetail:
-        try:
-            live = await self._get(f"/v1/game/{game_pk}/feed/live")
-            return self._parse_live_game(live)
-        except MLBAPIError:
-            summary = await self.get_schedule_by_game_pk(game_pk)
-            if summary is None:
-                raise
-            fallback: JsonDict = {"scheduleGame": summary.raw, "gamePk": game_pk}
-            for endpoint in ("linescore", "boxscore", "playByPlay"):
-                try:
-                    fallback[endpoint] = await self._get(f"/v1/game/{game_pk}/{endpoint}")
-                except MLBAPIError:
-                    fallback[endpoint] = {}
-            last_play = self._last_play_from_play_by_play(fallback.get("playByPlay", {}))
-            return GameDetail(summary=summary, last_play=last_play, raw=fallback)
+        for version in ("v1.1", "v1"):
+            try:
+                live = await self._get(f"/{version}/game/{game_pk}/feed/live")
+                return self._parse_live_game(live)
+            except MLBAPIError:
+                continue
+
+        summary = await self.get_schedule_by_game_pk(game_pk)
+        if summary is None:
+            raise MLBAPIError(f"MLB API request failed for game {game_pk}: no game data found")
+        fallback: JsonDict = {"scheduleGame": summary.raw, "gamePk": game_pk}
+        for endpoint in ("linescore", "boxscore", "playByPlay"):
+            try:
+                fallback[endpoint] = await self._get(f"/v1/game/{game_pk}/{endpoint}")
+            except MLBAPIError:
+                fallback[endpoint] = {}
+        last_play = self._last_play_from_play_by_play(fallback.get("playByPlay", {}))
+        return GameDetail(summary=summary, last_play=last_play, raw=fallback)
 
     async def get_standings(
         self,
@@ -298,9 +305,98 @@ class MLBStatsClient:
         return result.get("description") or result.get("event")
 
 
+def current_pitcher_for_team(detail: GameDetail, team_id: int) -> PitcherInfo | None:
+    linescore = _raw_linescore(detail.raw)
+    for side in ("defense", "offense"):
+        side_data = linescore.get(side) or {}
+        team = _team_from_team(side_data.get("team") or {})
+        if team.id == team_id and side_data.get("pitcher"):
+            return _pitcher_from_person(side_data["pitcher"], team)
+    return None
+
+
+def pitchers_by_team(detail: GameDetail) -> list[TeamPitchers]:
+    teams = _raw_boxscore(detail.raw).get("teams") or {}
+    team_pitchers: list[TeamPitchers] = []
+    for side in ("away", "home"):
+        side_data = teams.get(side) or {}
+        team = _team_from_team(side_data.get("team") or _raw_game_team(detail.raw, side))
+        players = side_data.get("players") or {}
+        pitchers = tuple(
+            _pitcher_from_player_record(_player_record(players, pitcher_id), team, pitcher_id)
+            for pitcher_id in side_data.get("pitchers") or ()
+            if _player_record(players, pitcher_id)
+        )
+        if team.id is not None or pitchers:
+            team_pitchers.append(TeamPitchers(team=team, pitchers=pitchers))
+    return team_pitchers
+
+
+def lineup_for_team(detail: GameDetail, team_id: int) -> TeamLineup | None:
+    teams = _raw_boxscore(detail.raw).get("teams") or {}
+    for side in ("away", "home"):
+        side_data = teams.get(side) or {}
+        team = _team_from_team(side_data.get("team") or _raw_game_team(detail.raw, side))
+        if team.id != team_id:
+            continue
+        players = side_data.get("players") or {}
+        entries: list[LineupEntry] = []
+        for order, player_id in enumerate(side_data.get("battingOrder") or (), start=1):
+            player = _player_record(players, player_id)
+            if not player:
+                continue
+            person = player.get("person") or {}
+            position = player.get("position") or {}
+            entries.append(
+                LineupEntry(
+                    order=order,
+                    player_id=_optional_int(person.get("id") or player_id),
+                    full_name=_name(person),
+                    position=position.get("abbreviation") or "",
+                )
+            )
+        return TeamLineup(team=team, entries=tuple(entries))
+    return None
+
+
 def normalize_leader_category(category: str) -> str:
     compact = category.strip().replace("-", "_")
     return LEADER_ALIASES.get(compact.lower(), category)
+
+
+def _raw_linescore(raw: JsonDict) -> JsonDict:
+    return ((raw.get("liveData") or {}).get("linescore") or raw.get("linescore") or {})
+
+
+def _raw_boxscore(raw: JsonDict) -> JsonDict:
+    return ((raw.get("liveData") or {}).get("boxscore") or raw.get("boxscore") or {})
+
+
+def _raw_game_team(raw: JsonDict, side: str) -> JsonDict:
+    return (((raw.get("gameData") or {}).get("teams") or {}).get(side) or {})
+
+
+def _player_record(players: JsonDict, player_id: int | str) -> JsonDict:
+    return players.get(f"ID{player_id}") or players.get(str(player_id)) or {}
+
+
+def _pitcher_from_player_record(
+    player: JsonDict, team: TeamInfo, fallback_player_id: int | str | None = None
+) -> PitcherInfo:
+    person = player.get("person") or {}
+    return PitcherInfo(
+        player_id=_optional_int(person.get("id") or fallback_player_id),
+        full_name=_name(person),
+        team=team,
+    )
+
+
+def _pitcher_from_person(person: JsonDict, team: TeamInfo) -> PitcherInfo:
+    return PitcherInfo(
+        player_id=_optional_int(person.get("id")),
+        full_name=_name(person),
+        team=team,
+    )
 
 
 def _team_from_wrapper(wrapper: JsonDict) -> TeamInfo:

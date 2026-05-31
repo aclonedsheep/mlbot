@@ -4,11 +4,15 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 
 ## Commands
 
-- `@mlb` shows today's schedule, live games, and final scores.
+- `@mlb` shows today's schedule in one compact message.
+- `@mlb *` shows only live games.
 - `@mlb tomorrow` shows tomorrow's schedule.
 - `@mlb TEAM` shows today's game for a team.
 - `@mlb TEAM tomorrow` shows tomorrow's game for a team.
 - `@mlb game GAMEPK` shows one game by MLB game id.
+- `@mlbpitcher TEAM` shows the current pitcher for that team's game.
+- `@mlbpitchers TEAM` shows all pitchers used in that team's game.
+- `@mlblineup TEAM` shows the posted lineup for that team.
 - `@standings [AL|NL|division|TEAM]` shows regular-season standings.
 - `@wildcard [AL|NL|all]` shows wildcard standings.
 - `@sstats <player name> [hitting|pitching|fielding] [season]` shows season stats.

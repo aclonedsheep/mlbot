@@ -4,8 +4,9 @@ The bot listens for commands beginning with `@` by default.
 
 ## Game And Schedule
 
-- `@mlb`: today's MLB schedule with live status and final scores.
-- `@mlb tomorrow`: tomorrow's MLB schedule.
+- `@mlb`: today's MLB schedule in one compact message.
+- `@mlb *`: live games only.
+- `@mlb tomorrow`: tomorrow's MLB schedule in one compact message.
 - `@mlb yesterday`: yesterday's final scores.
 - `@mlb TEAM`: today's game for a team abbreviation or alias.
 - `@mlb TEAM tomorrow`: tomorrow's game for a team.
@@ -16,9 +17,24 @@ Examples:
 
 ```text
 @mlb
+@mlb *
 @mlb NYY
 @mlb LAD tomorrow
 @mlb game 824832
+```
+
+## Game Details
+
+- `@mlbpitcher TEAM`: current pitcher for that team's game.
+- `@mlbpitchers TEAM`: all pitchers used in that team's game.
+- `@mlblineup TEAM`: posted lineup for that team, or a message if unavailable.
+
+Examples:
+
+```text
+@mlbpitcher NYY
+@mlbpitchers LAD
+@mlblineup SEA
 ```
 
 ## Standings

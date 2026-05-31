@@ -6,6 +6,7 @@ import pytest
 
 from mlb_irc_bot.commands import CommandRouter
 from mlb_irc_bot.mlb.models import (
+    GameDetail,
     GameSummary,
     Leader,
     PlayerSearchResult,
@@ -16,15 +17,22 @@ from mlb_irc_bot.mlb.models import (
 
 
 class FakeClient:
-    def __init__(self) -> None:
+    def __init__(self, games: list[GameSummary] | None = None) -> None:
         self.schedule_calls = []
         self.standings_calls = []
         self.leader_calls = []
+        self.games = games
 
     async def get_schedule(
         self, target_date: date, team_id: int | None = None
     ) -> list[GameSummary]:
         self.schedule_calls.append((target_date, team_id))
+        if self.games is not None:
+            return [
+                game
+                for game in self.games
+                if team_id is None or team_id in {game.away.id, game.home.id}
+            ]
         return [
             GameSummary(
                 game_pk=123,
@@ -41,8 +49,8 @@ class FakeClient:
             )
         ]
 
-    async def get_game_detail(self, game_pk: int):  # pragma: no cover - not used here
-        raise AssertionError(f"unexpected live detail lookup {game_pk}")
+    async def get_game_detail(self, game_pk: int) -> GameDetail:
+        return _live_detail()
 
     async def get_standings(self, *, season: int, standings_type: str, league: str | None):
         self.standings_calls.append((season, standings_type, league))
@@ -96,8 +104,7 @@ async def test_mlb_tomorrow_uses_next_day_schedule() -> None:
     replies = await router.handle_message("@mlb tomorrow")
 
     assert client.schedule_calls == [(date(2026, 6, 1), None)]
-    assert replies[0] == "MLB 2026-06-01: 1 game(s)"
-    assert "LAD @ NYY" in replies[1]
+    assert replies == ["MLB 2026-06-01: LAD vs NYY 7:05pm"]
 
 
 @pytest.mark.asyncio
@@ -110,6 +117,61 @@ async def test_mlb_team_tomorrow_uses_team_id() -> None:
     assert client.schedule_calls == [(date(2026, 6, 1), 147)]
     assert replies == [
         "LAD @ NYY: 7:05 PM EDT at Yankee Stadium (probables: Dodger Arm vs Yankee Arm)"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mlb_star_returns_only_live_games() -> None:
+    client = FakeClient(games=[_live_game(), _final_game(), _upcoming_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@mlb *")
+
+    assert replies == ["MLB live: TOR 1-2 BAL Top 3, 1 out"]
+
+
+@pytest.mark.asyncio
+async def test_mlb_star_reports_no_live_games() -> None:
+    client = FakeClient(games=[_final_game(), _upcoming_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@mlb *")
+
+    assert replies == ["MLB live: no games live."]
+
+
+@pytest.mark.asyncio
+async def test_mlb_pitcher_shows_current_team_pitcher() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@mlbpitcher TOR")
+
+    assert replies == ["TOR game pitcher: TOR Spencer Miles (TOR vs BAL, In Progress)"]
+
+
+@pytest.mark.asyncio
+async def test_mlb_pitchers_shows_all_game_pitchers() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@mlbpitchers TOR")
+
+    assert replies == [
+        "Pitchers TOR: Spencer Miles, Reliever One",
+        "Pitchers BAL: Kyle Bradish",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mlb_lineup_shows_requested_team_lineup() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@mlblineup TOR")
+
+    assert replies == [
+        "TOR lineup: 1. Nathan Lukes LF; 2. Vladimir Guerrero Jr. DH"
     ]
 
 
@@ -145,3 +207,118 @@ async def test_leaders_normalizes_category_alias() -> None:
 
     assert client.leader_calls == [("homeRuns", 2026, 3)]
     assert replies == ["homeRuns leaders: 1. Slugger 20 (Club)"]
+
+
+def _live_game() -> GameSummary:
+    return GameSummary(
+        game_pk=824832,
+        game_date=datetime(2026, 5, 31, 17, 35, tzinfo=UTC),
+        official_date=date(2026, 5, 31),
+        status="Live",
+        abstract_state="Live",
+        detailed_state="In Progress",
+        away=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
+        home=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
+        away_score=1,
+        home_score=2,
+        linescore=SimpleNamespace(
+            current_inning=3,
+            inning_half="Top",
+            balls=None,
+            strikes=None,
+            outs=1,
+            runners=(),
+        ),
+    )
+
+
+def _final_game() -> GameSummary:
+    return GameSummary(
+        game_pk=1,
+        game_date=datetime(2026, 5, 31, 16, 0, tzinfo=UTC),
+        official_date=date(2026, 5, 31),
+        status="Final",
+        abstract_state="Final",
+        detailed_state="Final",
+        away=TeamInfo(id=119, name="Los Angeles Dodgers", abbreviation="LAD"),
+        home=TeamInfo(id=147, name="New York Yankees", abbreviation="NYY"),
+        away_score=5,
+        home_score=4,
+    )
+
+
+def _upcoming_game() -> GameSummary:
+    return GameSummary(
+        game_pk=2,
+        game_date=datetime(2026, 5, 31, 23, 5, tzinfo=UTC),
+        official_date=date(2026, 5, 31),
+        status="Preview",
+        abstract_state="Preview",
+        detailed_state="Scheduled",
+        away=TeamInfo(id=136, name="Seattle Mariners", abbreviation="SEA"),
+        home=TeamInfo(id=135, name="San Diego Padres", abbreviation="SD"),
+    )
+
+
+def _live_detail() -> GameDetail:
+    return GameDetail(
+        summary=_live_game(),
+        raw={
+            "gameData": {
+                "teams": {
+                    "away": {"id": 141, "name": "Toronto Blue Jays", "abbreviation": "TOR"},
+                    "home": {"id": 110, "name": "Baltimore Orioles", "abbreviation": "BAL"},
+                }
+            },
+            "liveData": {
+                "linescore": {
+                    "offense": {
+                        "team": {"id": 141, "name": "Toronto Blue Jays"},
+                        "pitcher": {"id": 693686, "fullName": "Spencer Miles"},
+                    },
+                    "defense": {
+                        "team": {"id": 110, "name": "Baltimore Orioles"},
+                        "pitcher": {"id": 680694, "fullName": "Kyle Bradish"},
+                    },
+                },
+                "boxscore": {
+                    "teams": {
+                        "away": {
+                            "team": {"id": 141, "name": "Toronto Blue Jays"},
+                            "battingOrder": [664770, 665489],
+                            "pitchers": [693686, 123456],
+                            "players": {
+                                "ID664770": {
+                                    "person": {"id": 664770, "fullName": "Nathan Lukes"},
+                                    "position": {"abbreviation": "LF"},
+                                },
+                                "ID665489": {
+                                    "person": {
+                                        "id": 665489,
+                                        "fullName": "Vladimir Guerrero Jr.",
+                                    },
+                                    "position": {"abbreviation": "DH"},
+                                },
+                                "ID693686": {
+                                    "person": {"id": 693686, "fullName": "Spencer Miles"}
+                                },
+                                "ID123456": {
+                                    "person": {"id": 123456, "fullName": "Reliever One"}
+                                },
+                            },
+                        },
+                        "home": {
+                            "team": {"id": 110, "name": "Baltimore Orioles"},
+                            "battingOrder": [],
+                            "pitchers": [680694],
+                            "players": {
+                                "ID680694": {
+                                    "person": {"id": 680694, "fullName": "Kyle Bradish"}
+                                }
+                            },
+                        },
+                    }
+                },
+            },
+        },
+    )

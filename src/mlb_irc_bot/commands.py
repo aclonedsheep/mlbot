@@ -3,17 +3,29 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
 from mlb_irc_bot.config import Settings
-from mlb_irc_bot.mlb.client import MLBAPIError, MLBStatsClient, normalize_leader_category
+from mlb_irc_bot.mlb.client import (
+    MLBAPIError,
+    MLBStatsClient,
+    current_pitcher_for_team,
+    lineup_for_team,
+    normalize_leader_category,
+    pitchers_by_team,
+)
 from mlb_irc_bot.mlb.formatters import (
+    format_compact_schedule,
+    format_current_pitcher,
     format_game_detail,
     format_game_summary,
     format_leaders,
+    format_lineup,
+    format_pitchers,
     format_player_candidates,
     format_player_stats,
-    format_schedule,
+    format_probable_pitchers,
     format_standings,
     format_team_standing,
 )
+from mlb_irc_bot.mlb.models import GameSummary
 from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY, TeamDirectory
 
 DATE_WORDS = {"today", "tomorrow", "yesterday"}
@@ -50,6 +62,12 @@ class CommandRouter:
         try:
             if command == "mlb":
                 return await self._mlb(args)
+            if command == "mlbpitcher":
+                return await self._mlb_pitcher(args)
+            if command == "mlbpitchers":
+                return await self._mlb_pitchers(args)
+            if command == "mlblineup":
+                return await self._mlb_lineup(args)
             if command == "standings":
                 return await self._standings(args, wildcard=False)
             if command == "wildcard":
@@ -74,6 +92,16 @@ class CommandRouter:
             return await self._schedule_for_date(self._date_for("today"))
 
         first = args[0].lower()
+        if first == "*":
+            target_date = self._date_for(args[1]) if len(args) > 1 else self._date_for("today")
+            games = await self.client.get_schedule(target_date)
+            return format_compact_schedule(
+                games,
+                target_date,
+                self.settings.zoneinfo(),
+                live_only=True,
+            )
+
         if first == "game" and len(args) >= 2 and args[1].isdigit():
             detail = await self.client.get_game_detail(int(args[1]))
             return format_game_detail(detail, self.settings.zoneinfo())
@@ -100,7 +128,36 @@ class CommandRouter:
 
     async def _schedule_for_date(self, target_date: date) -> list[str]:
         games = await self.client.get_schedule(target_date)
-        return format_schedule(games, target_date, self.settings.zoneinfo())
+        return format_compact_schedule(games, target_date, self.settings.zoneinfo())
+
+    async def _mlb_pitcher(self, args: list[str]) -> list[str]:
+        game, team_abbreviation = await self._today_game_for_team(args, "mlbpitcher")
+        if game is None:
+            return [team_abbreviation]
+        if game.is_upcoming:
+            return [format_probable_pitchers(game)]
+        detail = await self.client.get_game_detail(game.game_pk)
+        team = self.teams.resolve(args[0])
+        pitcher = current_pitcher_for_team(detail, team.team_id)
+        return [format_current_pitcher(game, team.abbreviation, pitcher)]
+
+    async def _mlb_pitchers(self, args: list[str]) -> list[str]:
+        game, message_or_abbreviation = await self._today_game_for_team(args, "mlbpitchers")
+        if game is None:
+            return [message_or_abbreviation]
+        if game.is_upcoming:
+            return [format_probable_pitchers(game)]
+        detail = await self.client.get_game_detail(game.game_pk)
+        return format_pitchers(pitchers_by_team(detail), game)
+
+    async def _mlb_lineup(self, args: list[str]) -> list[str]:
+        game, message_or_abbreviation = await self._today_game_for_team(args, "mlblineup")
+        if game is None:
+            return [message_or_abbreviation]
+        detail = await self.client.get_game_detail(game.game_pk)
+        team = self.teams.resolve(args[0])
+        lineup = lineup_for_team(detail, team.team_id)
+        return [format_lineup(lineup, game, team.abbreviation)]
 
     async def _standings(self, args: list[str], *, wildcard: bool) -> list[str]:
         season = self.now().year
@@ -172,8 +229,14 @@ class CommandRouter:
         if topic == "mlb":
             return [
                 f"{prefix}mlb [today|tomorrow|yesterday] | "
+                f"{prefix}mlb * | "
                 f"{prefix}mlb TEAM [today|tomorrow|yesterday] | "
                 f"{prefix}mlb game GAMEPK"
+            ]
+        if topic in {"mlbpitcher", "mlbpitchers", "mlblineup"}:
+            return [
+                f"{prefix}mlbpitcher TEAM, {prefix}mlbpitchers TEAM, "
+                f"{prefix}mlblineup TEAM"
             ]
         if topic == "standings":
             return [f"{prefix}standings [AL|NL|TEAM] and {prefix}wildcard [AL|NL|all]"]
@@ -184,7 +247,8 @@ class CommandRouter:
         return [
             "Commands: "
             f"{prefix}mlb, {prefix}mlb TEAM, {prefix}mlb tomorrow, {prefix}standings, "
-            f"{prefix}wildcard, {prefix}sstats, {prefix}leaders, {prefix}help <command>"
+            f"{prefix}wildcard, {prefix}mlbpitcher, {prefix}mlbpitchers, "
+            f"{prefix}mlblineup, {prefix}sstats, {prefix}leaders, {prefix}help <command>"
         ]
 
     def _sstats_usage(self) -> str:
@@ -208,6 +272,20 @@ class CommandRouter:
             raise ValueError(
                 f"unknown date '{value}'. Use today, tomorrow, yesterday, or YYYY-MM-DD."
             ) from exc
+
+    async def _today_game_for_team(
+        self, args: list[str], command_name: str
+    ) -> tuple[GameSummary | None, str]:
+        if not args:
+            return None, f"Usage: {self.settings.command_prefix}{command_name} TEAM"
+        team = self.teams.resolve(args[0])
+        if team is None:
+            return None, f"Unknown team '{args[0]}'. Try an MLB abbreviation like NYY or LAD."
+        target_date = self._date_for("today")
+        games = await self.client.get_schedule(target_date, team_id=team.team_id)
+        if not games:
+            return None, f"{team.abbreviation}: no MLB game found for {target_date.isoformat()}."
+        return games[0], team.abbreviation
 
 
 def _league_from_scope(scope: str) -> str | None:

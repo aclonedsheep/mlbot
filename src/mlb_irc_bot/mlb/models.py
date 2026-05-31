@@ -64,6 +64,33 @@ class GameDetail:
 
 
 @dataclass(frozen=True)
+class PitcherInfo:
+    player_id: int | None
+    full_name: str
+    team: TeamInfo
+
+
+@dataclass(frozen=True)
+class TeamPitchers:
+    team: TeamInfo
+    pitchers: tuple[PitcherInfo, ...]
+
+
+@dataclass(frozen=True)
+class LineupEntry:
+    order: int
+    player_id: int | None
+    full_name: str
+    position: str
+
+
+@dataclass(frozen=True)
+class TeamLineup:
+    team: TeamInfo
+    entries: tuple[LineupEntry, ...]
+
+
+@dataclass(frozen=True)
 class StandingTeam:
     team_id: int | None
     team_name: str

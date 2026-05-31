@@ -1,8 +1,17 @@
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from mlb_irc_bot.mlb.models import GameDetail, GameSummary, Leader, PlayerStats, StandingTeam
+from mlb_irc_bot.mlb.models import (
+    GameDetail,
+    GameSummary,
+    Leader,
+    PitcherInfo,
+    PlayerStats,
+    StandingTeam,
+    TeamLineup,
+    TeamPitchers,
+)
 
 MAX_IRC_LEN = 390
 
@@ -13,6 +22,43 @@ def format_schedule(games: list[GameSummary], target_date: date, tz: ZoneInfo) -
     lines = [f"MLB {target_date.isoformat()}: {len(games)} game(s)"]
     lines.extend(_truncate(format_game_summary(game, tz)) for game in games)
     return lines
+
+
+def format_compact_schedule(
+    games: list[GameSummary],
+    target_date: date,
+    tz: ZoneInfo,
+    *,
+    live_only: bool = False,
+) -> list[str]:
+    if live_only:
+        games = [game for game in games if game.is_live]
+        title = "MLB live"
+        if not games:
+            return [f"{title}: no games live."]
+    else:
+        title = f"MLB {target_date.isoformat()}"
+        if not games:
+            return [f"{title}: no games scheduled."]
+
+    games = sorted(games, key=lambda game: game.game_date or datetime.max.replace(tzinfo=tz))
+    bits = [format_compact_game(game, tz) for game in games]
+    return [_truncate(f"{title}: " + "; ".join(bits))]
+
+
+def format_compact_game(game: GameSummary, tz: ZoneInfo) -> str:
+    if game.is_final:
+        return (
+            f"{game.away.abbreviation} {game.away_score}-{game.home_score} "
+            f"{game.home.abbreviation} F"
+        )
+    if game.is_live:
+        state = format_linescore(game) or game.detailed_state or "Live"
+        return (
+            f"{game.away.abbreviation} {game.away_score}-{game.home_score} "
+            f"{game.home.abbreviation} {state}"
+        )
+    return f"{game.away.abbreviation} vs {game.home.abbreviation} {_compact_time(game, tz)}"
 
 
 def format_game_summary(game: GameSummary, tz: ZoneInfo) -> str:
@@ -128,12 +174,72 @@ def format_leaders(category: str, leaders: list[Leader]) -> str:
     return _truncate(f"{category} leaders: " + "; ".join(bits))
 
 
+def format_current_pitcher(
+    game: GameSummary, requested_abbreviation: str, pitcher: PitcherInfo | None
+) -> str:
+    if pitcher is None:
+        return (
+            f"{requested_abbreviation}: current pitcher is not available for "
+            f"{game.away.abbreviation} vs {game.home.abbreviation} ({game.detailed_state})."
+        )
+    return _truncate(
+        f"{requested_abbreviation} game pitcher: {pitcher.team.abbreviation} "
+        f"{pitcher.full_name} ({game.away.abbreviation} vs {game.home.abbreviation}, "
+        f"{game.detailed_state or game.status})"
+    )
+
+
+def format_probable_pitchers(game: GameSummary) -> str:
+    away = game.away_probable_pitcher or "TBD"
+    home = game.home_probable_pitcher or "TBD"
+    return _truncate(
+        f"Probable pitchers {game.away.abbreviation} vs {game.home.abbreviation}: "
+        f"{game.away.abbreviation} {away}; {game.home.abbreviation} {home}"
+    )
+
+
+def format_pitchers(groups: list[TeamPitchers], game: GameSummary) -> list[str]:
+    if not groups or not any(group.pitchers for group in groups):
+        return [
+            f"Pitchers are not available yet for "
+            f"{game.away.abbreviation} vs {game.home.abbreviation}."
+        ]
+    return [
+        _truncate(
+            f"Pitchers {group.team.abbreviation}: "
+            + ", ".join(pitcher.full_name for pitcher in group.pitchers)
+        )
+        for group in groups
+        if group.pitchers
+    ]
+
+
+def format_lineup(lineup: TeamLineup | None, game: GameSummary, requested_abbreviation: str) -> str:
+    if lineup is None or not lineup.entries:
+        return (
+            f"{requested_abbreviation} lineup is not available for "
+            f"{game.away.abbreviation} vs {game.home.abbreviation}."
+        )
+    bits = [
+        f"{entry.order}. {entry.full_name} {entry.position}".strip()
+        for entry in lineup.entries
+    ]
+    return _truncate(f"{lineup.team.abbreviation} lineup: " + "; ".join(bits))
+
+
 def _probables(game: GameSummary) -> str:
     if not game.away_probable_pitcher and not game.home_probable_pitcher:
         return ""
     away = game.away_probable_pitcher or "TBD"
     home = game.home_probable_pitcher or "TBD"
     return f" (probables: {away} vs {home})"
+
+
+def _compact_time(game: GameSummary, tz: ZoneInfo) -> str:
+    if game.game_date is None:
+        return "TBD"
+    local = game.game_date.astimezone(tz)
+    return f"{local.strftime('%I').lstrip('0') or '0'}:{local.strftime('%M%p').lower()}"
 
 
 def _rank_key(value: str) -> tuple[int, str]:
