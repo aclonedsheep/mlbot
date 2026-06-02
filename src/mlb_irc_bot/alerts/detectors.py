@@ -93,7 +93,7 @@ def _bases_loaded_alerts(feed: JsonDict) -> list[Alert]:
             game_pk=game_pk,
             message=(
                 f"{_alert_label('Bases loaded', irc.IRCColor.ORANGE)}: "
-                f"{irc.bold(team)}, {irc.live(f'{half} {inning}')}, "
+                f"{irc.bold(team)}, {irc.bold(f'{half} {inning}')}, "
                 f"{irc.value(linescore.get('outs', 0))} out(s)."
             ),
         )
@@ -228,11 +228,11 @@ def _immaculate_alerts(feed: JsonDict) -> list[Alert]:
                 key=key,
                 alert_type="immaculate",
                 game_pk=game_pk,
-                message=(
-                    f"{_alert_label('Immaculate inning', irc.IRCColor.LIGHT_CYAN)}: "
-                    f"{irc.bold(pitcher_name)} struck out the side "
-                    f"on {irc.value(9)} pitches in the {irc.live(f'{half} {inning}')}."
-                ),
+                    message=(
+                        f"{_alert_label('Immaculate inning', irc.IRCColor.LIGHT_CYAN)}: "
+                        f"{irc.bold(pitcher_name)} struck out the side "
+                        f"on {irc.value(9)} pitches in the {irc.bold(f'{half} {inning}')}."
+                    ),
             )
         )
     return alerts

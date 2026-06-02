@@ -73,19 +73,19 @@ def title(text: object) -> str:
 
 
 def team(text: object, *, home: bool = False) -> str:
-    return style(text, fg=IRCColor.LIGHT_GREEN if home else IRCColor.LIGHT_BLUE, bold=True)
+    return style(text, bold=True)
 
 
 def section(text: object) -> str:
-    return style(text, fg=IRCColor.TEAL, italic=True)
+    return style(text, italic=True)
 
 
 def stat_label(text: object) -> str:
-    return style(text, fg=IRCColor.PURPLE, italic=True)
+    return style(text, italic=True)
 
 
 def value(text: object) -> str:
-    return style(text, fg=IRCColor.YELLOW, bold=True)
+    return style(text, bold=True)
 
 
 def live(text: object) -> str:

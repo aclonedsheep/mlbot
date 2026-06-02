@@ -82,3 +82,9 @@
 - Formatting: styled titles, teams, live/final states, section labels, ranks, stat labels, values, command help/errors, no-data messages, and alert prefixes.
 - Docs: noted that live IRC replies are styled while documentation examples remain plaintext.
 - Verification: Python 3.12.13 `pytest -q -o cache_dir=$env:TEMP\mlbot-pytest-cache --basetemp=$env:TEMP\mlbot-pytest-basetemp` passes with 33 tests; `ruff check .` passes.
+
+## 2026-06-01 - Iteration 11: Calmer IRC Styling
+
+- Goal: reduce visual noise after live review showed the first styled pass was too colorful.
+- Decisions: keep bold/italic for teams, sections, labels, and values; reserve colors for titles, live/error/warning/final/no-data states, and alert prefixes.
+- Verification: Python 3.12.13 `pytest -q -o cache_dir=$env:TEMP\mlbot-pytest-cache --basetemp=$env:TEMP\mlbot-pytest-basetemp` passes with 33 tests; `ruff check .` passes.
