@@ -2,6 +2,9 @@
 
 The bot listens for commands beginning with `@` by default.
 
+Live IRC replies include standard IRC bold, italic, and foreground color control
+codes for readability. The examples below are plaintext.
+
 ## Game And Schedule
 
 - `@mlb`: today's MLB schedule in one compact message.

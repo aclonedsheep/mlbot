@@ -1,4 +1,5 @@
 from mlb_irc_bot.alerts.detectors import collect_alerts
+from mlb_irc_bot.irc_format import BOLD, COLOR, strip_irc_formatting
 
 
 def test_collect_alerts_detects_live_events() -> None:
@@ -82,6 +83,7 @@ def test_collect_alerts_detects_live_events() -> None:
 
     alerts = collect_alerts(feed)
     alert_types = {alert.alert_type for alert in alerts}
+    alerts_by_type = {alert.alert_type: alert for alert in alerts}
 
     assert {
         "home_run",
@@ -93,6 +95,13 @@ def test_collect_alerts_detects_live_events() -> None:
         "cycle",
         "immaculate",
     } <= alert_types
+    assert strip_irc_formatting(alerts_by_type["home_run"].message) == "HR: Mookie Betts homers."
+    assert (
+        strip_irc_formatting(alerts_by_type["bases_loaded"].message)
+        == "Bases loaded: Los Angeles Dodgers, Top 6, 1 out(s)."
+    )
+    assert BOLD in alerts_by_type["home_run"].message
+    assert COLOR in alerts_by_type["home_run"].message
 
 
 def _strikeout_half_inning() -> list[dict]:

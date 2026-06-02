@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from mlb_irc_bot import irc_format as irc
 from mlb_irc_bot.mlb.models import (
     GameDetail,
     GameSummary,
@@ -9,6 +10,7 @@ from mlb_irc_bot.mlb.models import (
     PitcherInfo,
     PlayerStats,
     StandingTeam,
+    TeamInfo,
     TeamLineup,
     TeamPitchers,
     TeamStats,
@@ -20,10 +22,11 @@ MAX_IRC_LEN = 390
 
 
 def format_schedule(games: list[GameSummary], target_date: date, tz: ZoneInfo) -> list[str]:
+    title = f"MLB {target_date.isoformat()}"
     if not games:
-        return [f"MLB {target_date.isoformat()}: no games scheduled."]
+        return [f"{irc.title(title)}: {irc.muted('no games scheduled.')}"]
     bits = [format_game_summary(game, tz) for game in games]
-    return [_truncate(f"MLB {target_date.isoformat()}: " + "; ".join(bits))]
+    return [_truncate(f"{irc.title(title)}: " + "; ".join(bits))]
 
 
 def format_compact_schedule(
@@ -37,45 +40,50 @@ def format_compact_schedule(
         games = [game for game in games if game.is_live]
         title = "MLB live"
         if not games:
-            return [f"{title}: no games live."]
+            return [f"{irc.title(title)}: {irc.muted('no games live.')}"]
     else:
         title = f"MLB {target_date.isoformat()}"
         if not games:
-            return [f"{title}: no games scheduled."]
+            return [f"{irc.title(title)}: {irc.muted('no games scheduled.')}"]
 
     games = sorted(games, key=lambda game: game.game_date or datetime.max.replace(tzinfo=tz))
     bits = [format_compact_game(game, tz) for game in games]
-    return [_truncate(f"{title}: " + "; ".join(bits))]
+    return [_truncate(f"{irc.title(title)}: " + "; ".join(bits))]
 
 
 def format_compact_game(game: GameSummary, tz: ZoneInfo) -> str:
     if game.is_final:
         return (
-            f"{game.away.abbreviation} {game.away_score}-{game.home_score} "
-            f"{game.home.abbreviation} F"
+            f"{_team_abbr(game.away, home=False)} "
+            f"{irc.value(f'{game.away_score}-{game.home_score}')} "
+            f"{_team_abbr(game.home, home=True)} {irc.muted('F')}"
         )
     if game.is_live:
         state = format_linescore(game) or game.detailed_state or "Live"
         return (
-            f"{game.away.abbreviation} {game.away_score}-{game.home_score} "
-            f"{game.home.abbreviation} {state}"
+            f"{_team_abbr(game.away, home=False)} "
+            f"{irc.value(f'{game.away_score}-{game.home_score}')} "
+            f"{_team_abbr(game.home, home=True)} {state}"
         )
-    return f"{game.away.abbreviation} vs {game.home.abbreviation} {_compact_time(game, tz)}"
+    return (
+        f"{_team_abbr(game.away, home=False)} vs "
+        f"{_team_abbr(game.home, home=True)} {irc.value(_compact_time(game, tz))}"
+    )
 
 
 def format_game_summary(game: GameSummary, tz: ZoneInfo) -> str:
-    matchup = f"{game.away.abbreviation} @ {game.home.abbreviation}"
+    matchup = f"{_team_abbr(game.away, home=False)} @ {_team_abbr(game.home, home=True)}"
     if game.is_live:
         return f"{matchup}: {score(game)} {format_linescore(game)}"
     if game.is_final:
-        return f"{matchup}: Final {score(game)}"
+        return f"{matchup}: {irc.muted('Final')} {score(game)}"
     when = "TBD"
     if game.game_date is not None:
         local = game.game_date.astimezone(tz)
         when = f"{local.strftime('%I').lstrip('0') or '0'}:{local.strftime('%M %p %Z')}"
     probables = _probables(game)
     venue = f" at {game.venue}" if game.venue else ""
-    return f"{matchup}: {when}{venue}{probables}"
+    return f"{matchup}: {irc.value(when)}{venue}{probables}"
 
 
 def format_game_detail(
@@ -88,18 +96,18 @@ def format_game_detail(
     game = detail.summary
     line = format_game_summary(game, tz)
     if win_probability:
-        line += f" | Win: {_format_win_probability(win_probability)}"
+        line += f" | {irc.section('Win')}: {_format_win_probability(win_probability)}"
     if active_pitchers:
-        line += f" | P: {_format_active_pitchers(active_pitchers)}"
+        line += f" | {irc.section('P')}: {_format_active_pitchers(active_pitchers)}"
     if detail.last_play:
-        line += f" | Last play: {detail.last_play}"
+        line += f" | {irc.section('Last play')}: {detail.last_play}"
     return [_truncate(line)]
 
 
 def format_linescore(game: GameSummary) -> str:
     linescore = game.linescore
     if not linescore:
-        return game.detailed_state or game.status
+        return irc.live(game.detailed_state or game.status)
     inning = ""
     if linescore.inning_half and linescore.current_inning:
         inning = f"{linescore.inning_half} {linescore.current_inning}"
@@ -112,20 +120,27 @@ def format_linescore(game: GameSummary) -> str:
     if linescore.outs not in (None, 1):
         outs += "s"
     runners = f", runners: {','.join(linescore.runners)}" if linescore.runners else ""
-    return f"{inning}{outs}{count}{runners}".strip(", ")
+    return irc.live(f"{inning}{outs}{count}{runners}".strip(", "))
 
 
 def score(game: GameSummary) -> str:
     away_score = "-" if game.away_score is None else str(game.away_score)
     home_score = "-" if game.home_score is None else str(game.home_score)
-    return f"{game.away.abbreviation} {away_score}, {game.home.abbreviation} {home_score}"
+    return (
+        f"{_team_abbr(game.away, home=False)} {irc.value(away_score)}, "
+        f"{_team_abbr(game.home, home=True)} {irc.value(home_score)}"
+    )
+
+
+def _team_abbr(team: TeamInfo, *, home: bool) -> str:
+    return irc.team(team.abbreviation, home=home)
 
 
 def format_standings(
     records: list[StandingTeam], *, title: str, wildcard: bool = False
 ) -> list[str]:
     if not records:
-        return [f"{title}: no standings available."]
+        return [f"{irc.title(title)}: {irc.muted('no standings available.')}"]
     group_attr = "league_name" if wildcard else "division_name"
     grouped: dict[str, list[StandingTeam]] = defaultdict(list)
     for record in records:
@@ -142,27 +157,33 @@ def format_standings(
         for team in display_teams:
             back = team.wild_card_games_back if wildcard else team.games_back
             rank = team.wild_card_rank if wildcard else team.division_rank
-            bits.append(f"{rank}. {team.abbreviation} {team.wins}-{team.losses} {back} GB")
+            bits.append(
+                f"{irc.value(f'{rank}.')} {irc.team(team.abbreviation)} "
+                f"{irc.value(f'{team.wins}-{team.losses}')} {irc.value(back)} GB"
+            )
         if len(teams) > len(display_teams):
-            bits.append(f"+{len(teams) - len(display_teams)} more")
-        group_lines.append(f"{_short_group_name(group_name)}: " + ", ".join(bits))
+            bits.append(irc.muted(f"+{len(teams) - len(display_teams)} more"))
+        group_lines.append(f"{irc.section(_short_group_name(group_name))}: " + ", ".join(bits))
     if len(group_lines) == 1:
         _, _, only_group = group_lines[0].partition(": ")
-        return [_truncate(f"{title}: {only_group}")]
-    return [_truncate(f"{title}: " + " | ".join(group_lines))]
+        return [_truncate(f"{irc.title(title)}: {only_group}")]
+    return [_truncate(f"{irc.title(title)}: " + " | ".join(group_lines))]
 
 
 def format_team_standing(record: StandingTeam) -> str:
     return _truncate(
-        f"{record.abbreviation}: {record.wins}-{record.losses} "
-        f"({record.pct}), {record.division_name} rank {record.division_rank}, "
-        f"WC rank {record.wild_card_rank or '-'} ({record.wild_card_games_back} GB), "
-        f"L10 {record.last_ten}, streak {record.streak or '-'}"
+        f"{irc.team(record.abbreviation)}: {irc.value(f'{record.wins}-{record.losses}')} "
+        f"({irc.value(record.pct)}), {record.division_name} {irc.section('rank')} "
+        f"{irc.value(record.division_rank)}, {irc.section('WC rank')} "
+        f"{irc.value(record.wild_card_rank or '-')} "
+        f"({irc.value(record.wild_card_games_back)} GB), "
+        f"{irc.section('L10')} {irc.value(record.last_ten)}, "
+        f"{irc.section('streak')} {irc.value(record.streak or '-')}"
     )
 
 
 def format_player_candidates(candidates: list[str]) -> str:
-    return "Multiple players matched: " + "; ".join(candidates)
+    return f"{irc.warning('Multiple players matched')}: " + "; ".join(candidates)
 
 
 def format_player_stats(stats: PlayerStats) -> str:
@@ -176,48 +197,53 @@ def format_player_stats(stats: PlayerStats) -> str:
         )
     ):
         return (
-            f"No {stats.group} stats found for "
-            f"{stats.player.full_name} {period}."
+            f"{irc.muted('No')} {irc.stat_label(stats.group)} stats found for "
+            f"{irc.bold(stats.player.full_name)} {irc.value(period)}."
         )
     sections = [section for section in _player_stat_sections(stats) if section]
     return _truncate(
-        f"{stats.player.full_name} {period} {stats.group}: "
+        f"{irc.title(stats.player.full_name)} {irc.value(period)} {irc.stat_label(stats.group)}: "
         + " | ".join(sections)
     )
 
 
 def format_leaders(category: str, leaders: list[Leader]) -> str:
     if not leaders:
-        return f"No leaders found for {category}."
+        return f"{irc.muted('No leaders found')} for {irc.stat_label(category)}."
     bits = [
-        f"{leader.rank}. {leader.player_name} {leader.value}"
-        + (f" ({leader.team_name})" if leader.team_name else "")
+        f"{irc.value(f'{leader.rank}.')} {irc.bold(leader.player_name)} "
+        f"{irc.value(leader.value)}"
+        + (f" ({irc.muted(leader.team_name)})" if leader.team_name else "")
         for leader in leaders
     ]
-    return _truncate(f"{category} leaders: " + "; ".join(bits))
+    return _truncate(f"{irc.title(category)} leaders: " + "; ".join(bits))
 
 
 def format_boxscore(detail: GameDetail, pitcher_groups: list[TeamPitchers]) -> str:
     game = detail.summary
     away_line = _team_box_line(detail, "away")
     home_line = _team_box_line(detail, "home")
-    state = "F" if game.is_final else (format_linescore(game) or game.detailed_state)
+    state = (
+        irc.muted("F")
+        if game.is_final
+        else (format_linescore(game) or irc.live(game.detailed_state))
+    )
     bits = [
-        f"Box {game.away.abbreviation} {away_line}, "
-        f"{game.home.abbreviation} {home_line} {state}".strip()
+        f"{irc.title('Box')} {_team_abbr(game.away, home=False)} {away_line}, "
+        f"{_team_abbr(game.home, home=True)} {home_line} {state}".strip()
     ]
     left_on_base = _left_on_base(detail)
     if left_on_base:
-        bits.append("LOB " + left_on_base)
+        bits.append(f"{irc.section('LOB')} " + left_on_base)
     pitcher_bits = _box_pitcher_bits(pitcher_groups)
     if pitcher_bits:
-        bits.append("Pitching: " + "; ".join(pitcher_bits))
+        bits.append(f"{irc.section('Pitching')}: " + "; ".join(pitcher_bits))
     return _truncate(" | ".join(bits))
 
 
 def format_team_stats(stats_list: list[TeamStats]) -> str:
     if not stats_list:
-        return "No team stats found."
+        return f"{irc.muted('No team stats found.')}"
     team = stats_list[0].team
     period = _team_stat_period(stats_list[0])
     sections = []
@@ -230,10 +256,16 @@ def format_team_stats(stats_list: list[TeamStats]) -> str:
         else:
             section = _format_team_hitting_stats(stats.stats)
         if section:
-            sections.append(f"{prefix}: {section}")
+            sections.append(f"{irc.section(prefix)}: {section}")
     if not sections:
-        return f"No team stats found for {team.abbreviation} {period}."
-    return _truncate(f"{team.abbreviation} teamstats {period}: " + " | ".join(sections))
+        return (
+            f"{irc.muted('No team stats found')} for {irc.team(team.abbreviation)} "
+            f"{irc.value(period)}."
+        )
+    return _truncate(
+        f"{irc.team(team.abbreviation)} {irc.title('teamstats')} {irc.value(period)}: "
+        + " | ".join(sections)
+    )
 
 
 def format_transactions(
@@ -243,12 +275,12 @@ def format_transactions(
     limit: int = 5,
 ) -> str:
     if not transactions:
-        return f"{title}: no transactions found."
+        return f"{irc.title(title)}: {irc.muted('no transactions found.')}"
     display = transactions[:limit]
     bits = [_transaction_bit(transaction) for transaction in display]
     if len(transactions) > limit:
-        bits.append(f"+{len(transactions) - limit} more")
-    return _truncate(f"{title}: " + "; ".join(bits))
+        bits.append(irc.muted(f"+{len(transactions) - limit} more"))
+    return _truncate(f"{irc.title(title)}: " + "; ".join(bits))
 
 
 def format_current_pitcher(
@@ -256,15 +288,18 @@ def format_current_pitcher(
 ) -> str:
     if pitcher is None:
         return (
-            f"{requested_abbreviation}: current pitcher is not available for "
-            f"{game.away.abbreviation} vs {game.home.abbreviation} ({game.detailed_state})."
+            f"{irc.team(requested_abbreviation)}: current pitcher is "
+            f"{irc.muted('not available')} for "
+            f"{_team_abbr(game.away, home=False)} vs {_team_abbr(game.home, home=True)} "
+            f"({irc.live(game.detailed_state)})."
         )
     pitching_line = _format_pitcher_game_stats(pitcher.game_stats)
     return _truncate(
-        f"{requested_abbreviation} game pitcher: {pitcher.team.abbreviation} "
-        f"{pitcher.full_name} - {pitching_line} "
-        f"({game.away.abbreviation} vs {game.home.abbreviation}, "
-        f"{game.detailed_state or game.status})"
+        f"{irc.team(requested_abbreviation)} game pitcher: "
+        f"{irc.team(pitcher.team.abbreviation)} "
+        f"{irc.bold(pitcher.full_name)} - {pitching_line} "
+        f"({_team_abbr(game.away, home=False)} vs {_team_abbr(game.home, home=True)}, "
+        f"{irc.live(game.detailed_state or game.status)})"
     )
 
 
@@ -272,37 +307,42 @@ def format_probable_pitchers(game: GameSummary) -> str:
     away = game.away_probable_pitcher or "TBD"
     home = game.home_probable_pitcher or "TBD"
     return _truncate(
-        f"Probable pitchers {game.away.abbreviation} vs {game.home.abbreviation}: "
-        f"{game.away.abbreviation} {away}; {game.home.abbreviation} {home}"
+        f"{irc.title('Probable pitchers')} {_team_abbr(game.away, home=False)} vs "
+        f"{_team_abbr(game.home, home=True)}: "
+        f"{_team_abbr(game.away, home=False)} {irc.bold(away)}; "
+        f"{_team_abbr(game.home, home=True)} {irc.bold(home)}"
     )
 
 
 def format_pitchers(groups: list[TeamPitchers], game: GameSummary) -> list[str]:
     if not groups or not any(group.pitchers for group in groups):
         return [
-            f"Pitchers are not available yet for "
-            f"{game.away.abbreviation} vs {game.home.abbreviation}."
+            f"{irc.title('Pitchers')} are {irc.muted('not available yet')} for "
+            f"{_team_abbr(game.away, home=False)} vs {_team_abbr(game.home, home=True)}."
         ]
     bits = [
-        f"{group.team.abbreviation}: "
+        f"{irc.team(group.team.abbreviation)}: "
         + "; ".join(_format_pitcher_listing(pitcher) for pitcher in group.pitchers)
         for group in groups
         if group.pitchers
     ]
-    return [_truncate("Pitchers: " + " | ".join(bits))]
+    return [_truncate(f"{irc.title('Pitchers')}: " + " | ".join(bits))]
 
 
 def format_lineup(lineup: TeamLineup | None, game: GameSummary, requested_abbreviation: str) -> str:
     if lineup is None or not lineup.entries:
         return (
-            f"{requested_abbreviation} lineup is not available for "
-            f"{game.away.abbreviation} vs {game.home.abbreviation}."
+            f"{irc.team(requested_abbreviation)} lineup is {irc.muted('not available')} for "
+            f"{_team_abbr(game.away, home=False)} vs {_team_abbr(game.home, home=True)}."
         )
     bits = [
-        f"{entry.order}. {entry.full_name} {entry.position}".strip()
+        f"{irc.value(f'{entry.order}.')} {irc.bold(entry.full_name)} "
+        f"{irc.stat_label(entry.position)}".strip()
         for entry in lineup.entries
     ]
-    return _truncate(f"{lineup.team.abbreviation} lineup: " + "; ".join(bits))
+    return _truncate(
+        f"{irc.team(lineup.team.abbreviation)} {irc.title('lineup')}: " + "; ".join(bits)
+    )
 
 
 def _format_win_probability(win_probability: WinProbability) -> str:
@@ -315,12 +355,15 @@ def _format_win_probability(win_probability: WinProbability) -> str:
     scale = 100 if values and total <= 1.01 else 1
     values = [(team, probability * scale) for team, probability in values]
     values.sort(key=lambda item: item[1], reverse=True)
-    return ", ".join(f"{team} {_format_percent(probability)}" for team, probability in values)
+    return ", ".join(
+        f"{irc.team(team)} {irc.value(_format_percent(probability))}"
+        for team, probability in values
+    )
 
 
 def _format_active_pitchers(pitchers: list[PitcherInfo]) -> str:
     return "; ".join(
-        f"{pitcher.team.abbreviation} {pitcher.full_name} "
+        f"{irc.team(pitcher.team.abbreviation)} {irc.bold(pitcher.full_name)} "
         f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
         for pitcher in pitchers
     )
@@ -331,7 +374,7 @@ def _team_box_line(detail: GameDetail, side: str) -> str:
     runs = _display(team_line.get("runs", 0))
     hits = _display(team_line.get("hits", 0))
     errors = _display(team_line.get("errors", 0))
-    return f"{runs}-{hits}-{errors}"
+    return irc.value(f"{runs}-{hits}-{errors}")
 
 
 def _left_on_base(detail: GameDetail) -> str:
@@ -354,8 +397,8 @@ def _left_on_base(detail: GameDetail) -> str:
         return ""
     game = detail.summary
     return (
-        f"{game.away.abbreviation} {_display(away_lob or 0)}, "
-        f"{game.home.abbreviation} {_display(home_lob or 0)}"
+        f"{_team_abbr(game.away, home=False)} {irc.value(_display(away_lob or 0))}, "
+        f"{_team_abbr(game.home, home=True)} {irc.value(_display(home_lob or 0))}"
     )
 
 
@@ -366,7 +409,7 @@ def _box_pitcher_bits(groups: list[TeamPitchers]) -> list[str]:
             continue
         pitcher = group.pitchers[-1]
         bits.append(
-            f"{group.team.abbreviation} {pitcher.full_name} "
+            f"{irc.team(group.team.abbreviation)} {irc.bold(pitcher.full_name)} "
             f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
         )
     return bits
@@ -400,7 +443,11 @@ def _format_team_hitting_stats(stat: dict) -> str:
     slash = _slash_line(stat, ("avg", "obp", "slg"))
     if slash:
         ops = _first_value(stat, ("ops",))
-        bits.append(f"{slash} OPS {_display(ops)}" if ops is not None else slash)
+        bits.append(
+            f"{slash} {irc.stat_label('OPS')} {irc.value(_display(ops))}"
+            if ops is not None
+            else slash
+        )
     bits.extend(
         _counting_stats(
             stat,
@@ -454,7 +501,7 @@ def _probables(game: GameSummary) -> str:
         return ""
     away = game.away_probable_pitcher or "TBD"
     home = game.home_probable_pitcher or "TBD"
-    return f" (probables: {away} vs {home})"
+    return f" ({irc.section('probables')}: {irc.bold(away)} vs {irc.bold(home)})"
 
 
 def _player_stat_period(stats: PlayerStats) -> str:
@@ -560,7 +607,11 @@ def _format_hitting_stats(stat: dict) -> str:
     slash = _slash_line(stat, ("avg", "obp", "slg"))
     if slash:
         ops = _first_value(stat, ("ops",))
-        bits.append(f"{slash} OPS {_display(ops)}" if ops is not None else slash)
+        bits.append(
+            f"{slash} {irc.stat_label('OPS')} {irc.value(_display(ops))}"
+            if ops is not None
+            else slash
+        )
     bits.extend(
         _counting_stats(
             stat,
@@ -584,7 +635,7 @@ def _format_pitching_stats(stat: dict) -> str:
     wins = _first_value(stat, ("wins",))
     losses = _first_value(stat, ("losses",))
     if wins is not None and losses is not None:
-        bits.append(f"{_display(wins)}-{_display(losses)}")
+        bits.append(irc.value(f"{_display(wins)}-{_display(losses)}"))
     bits.extend(
         _labeled_stats(
             stat,
@@ -622,16 +673,19 @@ def _format_fielding_stats(stat: dict) -> str:
 
 def _prefixed_stats(prefix: str, stat: dict, pairs: tuple) -> str:
     bits = _labeled_stats(stat, pairs)
-    return f"{prefix}: " + ", ".join(bits) if bits else ""
+    return f"{irc.stat_label(prefix)}: " + ", ".join(bits) if bits else ""
 
 
 def _format_pitcher_listing(pitcher: PitcherInfo) -> str:
-    return f"{pitcher.full_name} {_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+    return (
+        f"{irc.bold(pitcher.full_name)} "
+        f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+    )
 
 
 def _format_pitcher_game_stats(stat: dict, *, compact: bool = False) -> str:
     if not stat:
-        return "no game stats yet"
+        return irc.muted("no game stats yet")
     pairs = (
         ("inningsPitched", "IP"),
         ("hits", "H"),
@@ -643,7 +697,7 @@ def _format_pitcher_game_stats(stat: dict, *, compact: bool = False) -> str:
     )
     bits = _value_labeled_stats(stat, pairs)
     if not bits:
-        return "no game stats yet"
+        return irc.muted("no game stats yet")
     return (" " if compact else ", ").join(bits)
 
 
@@ -651,7 +705,7 @@ def _slash_line(stat: dict, keys: tuple[str, str, str]) -> str:
     values = [_first_value(stat, (key,)) for key in keys]
     if not any(value is not None for value in values):
         return ""
-    return "/".join("-" if value is None else _display(value) for value in values)
+    return irc.value("/".join("-" if value is None else _display(value) for value in values))
 
 
 def _counting_stats(stat: dict, pairs: tuple[tuple[str, str], ...]) -> list[str]:
@@ -659,7 +713,7 @@ def _counting_stats(stat: dict, pairs: tuple[tuple[str, str], ...]) -> list[str]
     for key, label in pairs:
         value = _first_value(stat, (key,))
         if value is not None:
-            bits.append(f"{_display(value)} {label}")
+            bits.append(f"{irc.value(_display(value))} {irc.stat_label(label)}")
     return bits
 
 
@@ -670,7 +724,7 @@ def _labeled_stats(stat: dict, pairs: tuple) -> list[str]:
             keys = (keys,)
         value = _first_value(stat, keys)
         if value is not None:
-            bits.append(f"{label} {_display_labeled(value, label)}")
+            bits.append(f"{irc.stat_label(label)} {irc.value(_display_labeled(value, label))}")
     return bits
 
 
@@ -681,7 +735,7 @@ def _value_labeled_stats(stat: dict, pairs: tuple) -> list[str]:
             keys = (keys,)
         value = _first_value(stat, keys)
         if value is not None:
-            bits.append(f"{_display(value)} {label}")
+            bits.append(f"{irc.value(_display(value))} {irc.stat_label(label)}")
     return bits
 
 
@@ -736,9 +790,7 @@ def _short_group_name(value: str) -> str:
 
 
 def _truncate(value: str) -> str:
-    if len(value) <= MAX_IRC_LEN:
-        return value
-    return value[: MAX_IRC_LEN - 1].rstrip() + "..."
+    return irc.truncate_irc(value, MAX_IRC_LEN)
 
 
 def _truncate_piece(value: str, limit: int) -> str:

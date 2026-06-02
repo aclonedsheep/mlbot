@@ -74,3 +74,11 @@
 - Commands: added `@box TEAM [today|yesterday]`, `@box game GAMEPK`, `@teamstats TEAM [hitting|pitching] [season] [N days]`, and `@transactions [TEAM] [today|yesterday|N days|YYYY-MM-DD]`.
 - Formatting: live `@mlb TEAM` now appends `Win:` and `P:` sections before last play; win probability handles MLB percentage-point decimals such as `0.9` as `0.9%`, not `90%`.
 - Verification: Python 3.12.13 `pytest -o cache_dir=.tmp\pytest-cache` passes with 29 tests; `ruff check .` passes; live client smoke covered enriched `@mlb TEAM`, `@box`, `@teamstats`, and `@transactions`.
+
+## 2026-06-01 - Iteration 10: Styled IRC Responses
+
+- Goal: improve IRC readability for all command replies and live alerts using standard bold, italic, and foreground color control codes.
+- Decisions: add centralized IRC formatting helpers, keep styling always on, preserve stripped plaintext behavior for existing command contracts, and truncate by visible text while preserving complete control codes.
+- Formatting: styled titles, teams, live/final states, section labels, ranks, stat labels, values, command help/errors, no-data messages, and alert prefixes.
+- Docs: noted that live IRC replies are styled while documentation examples remain plaintext.
+- Verification: Python 3.12.13 `pytest -q -o cache_dir=$env:TEMP\mlbot-pytest-cache --basetemp=$env:TEMP\mlbot-pytest-basetemp` passes with 33 tests; `ruff check .` passes.

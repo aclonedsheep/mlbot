@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Any
 
+from mlb_irc_bot import irc_format as irc
 from mlb_irc_bot.alerts.messages import Alert
 
 JsonDict = dict[str, Any]
@@ -23,8 +24,9 @@ def final_alert_from_summary(summary: Any) -> Alert | None:
         return None
     key = f"{summary.game_pk}:final"
     message = (
-        f"Final: {summary.away.abbreviation} {summary.away_score}, "
-        f"{summary.home.abbreviation} {summary.home_score}"
+        f"{_alert_label('Final', irc.IRCColor.GRAY)}: "
+        f"{irc.team(summary.away.abbreviation)} {irc.value(summary.away_score)}, "
+        f"{irc.team(summary.home.abbreviation, home=True)} {irc.value(summary.home_score)}"
     )
     return Alert(key=key, alert_type="final", game_pk=summary.game_pk, message=message)
 
@@ -41,7 +43,12 @@ def _home_run_alerts(feed: JsonDict) -> list[Alert]:
         description = result.get("description") or f"Home run by {batter}"
         key = f"{game_pk}:hr:{play.get('about', {}).get('atBatIndex', index)}"
         alerts.append(
-            Alert(key=key, alert_type="home_run", game_pk=game_pk, message=f"HR: {description}")
+            Alert(
+                key=key,
+                alert_type="home_run",
+                game_pk=game_pk,
+                message=f"{_alert_label('HR', irc.IRCColor.ORANGE)}: {description}",
+            )
         )
     return alerts
 
@@ -63,7 +70,7 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
                 key=key,
                 alert_type="scoring",
                 game_pk=game_pk,
-                message=f"Scoring play: {description}",
+                message=f"{_alert_label('Scoring play', irc.IRCColor.RED)}: {description}",
             )
         )
     return alerts
@@ -84,7 +91,11 @@ def _bases_loaded_alerts(feed: JsonDict) -> list[Alert]:
             key=key,
             alert_type="bases_loaded",
             game_pk=game_pk,
-            message=f"Bases loaded: {team}, {half} {inning}, {linescore.get('outs', 0)} out(s).",
+            message=(
+                f"{_alert_label('Bases loaded', irc.IRCColor.ORANGE)}: "
+                f"{irc.bold(team)}, {irc.live(f'{half} {inning}')}, "
+                f"{irc.value(linescore.get('outs', 0))} out(s)."
+            ),
         )
     ]
 
@@ -106,7 +117,11 @@ def _final_alerts(feed: JsonDict) -> list[Alert]:
             key=f"{game_pk}:final",
             alert_type="final",
             game_pk=game_pk,
-            message=f"Final: {away_team} {away_runs}, {home_team} {home_runs}",
+            message=(
+                f"{_alert_label('Final', irc.IRCColor.GRAY)}: "
+                f"{irc.team(away_team)} {irc.value(away_runs)}, "
+                f"{irc.team(home_team, home=True)} {irc.value(home_runs)}"
+            ),
         )
     ]
 
@@ -132,8 +147,9 @@ def _no_hit_alerts(feed: JsonDict) -> list[Alert]:
                 alert_type="no_hitter",
                 game_pk=game_pk,
                 message=(
-                    f"No-hit bid: {pitching_abbr} has held {batting_abbr} "
-                    f"hitless through inning {inning}."
+                    f"{_alert_label('No-hit bid', irc.IRCColor.RED)}: "
+                    f"{irc.team(pitching_abbr)} has held {irc.team(batting_abbr, home=True)} "
+                    f"hitless through inning {irc.value(inning)}."
                 ),
             )
         )
@@ -160,7 +176,8 @@ def _cycle_alerts(feed: JsonDict) -> list[Alert]:
                     alert_type="cycle",
                     game_pk=game_pk,
                     message=(
-                        f"Cycle completed: {player_name} has singled, doubled, "
+                        f"{_alert_label('Cycle completed', irc.IRCColor.GREEN)}: "
+                        f"{irc.bold(player_name)} has singled, doubled, "
                         "tripled, and homered."
                     ),
                 )
@@ -171,7 +188,10 @@ def _cycle_alerts(feed: JsonDict) -> list[Alert]:
                     key=f"{game_pk}:cycle_watch:{player_id}:{missing[0]}",
                     alert_type="cycle_watch",
                     game_pk=game_pk,
-                    message=f"Cycle watch: {player_name} needs a {missing[0]}.",
+                    message=(
+                        f"{_alert_label('Cycle watch', irc.IRCColor.PURPLE)}: "
+                        f"{irc.bold(player_name)} needs a {irc.value(missing[0])}."
+                    ),
                 )
             )
     return alerts
@@ -209,8 +229,9 @@ def _immaculate_alerts(feed: JsonDict) -> list[Alert]:
                 alert_type="immaculate",
                 game_pk=game_pk,
                 message=(
-                    f"Immaculate inning: {pitcher_name} struck out the side "
-                    f"on 9 pitches in the {half} {inning}."
+                    f"{_alert_label('Immaculate inning', irc.IRCColor.LIGHT_CYAN)}: "
+                    f"{irc.bold(pitcher_name)} struck out the side "
+                    f"on {irc.value(9)} pitches in the {irc.live(f'{half} {inning}')}."
                 ),
             )
         )
@@ -270,3 +291,7 @@ def _person_name(value: JsonDict | None) -> str:
     if not value:
         return ""
     return value.get("fullName") or value.get("name") or value.get("abbreviation") or ""
+
+
+def _alert_label(text: str, color: irc.IRCColor) -> str:
+    return irc.style(text, fg=color, bold=True)

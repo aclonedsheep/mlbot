@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from mlb_irc_bot.commands import CommandRouter
+from mlb_irc_bot.irc_format import BOLD, COLOR, ITALIC, strip_irc_formatting
 from mlb_irc_bot.mlb.models import (
     GameDetail,
     GameSummary,
@@ -258,6 +259,12 @@ def fixed_now() -> datetime:
     return datetime(2026, 5, 31, 10, 0, tzinfo=ZoneInfo("America/New_York"))
 
 
+def _plain(replies: list[str] | None) -> list[str] | None:
+    if replies is None:
+        return None
+    return [strip_irc_formatting(reply) for reply in replies]
+
+
 @pytest.mark.asyncio
 async def test_mlb_tomorrow_uses_next_day_schedule() -> None:
     client = FakeClient()
@@ -266,7 +273,28 @@ async def test_mlb_tomorrow_uses_next_day_schedule() -> None:
     replies = await router.handle_message("@mlb tomorrow")
 
     assert client.schedule_calls == [(date(2026, 6, 1), None)]
-    assert replies == ["MLB 2026-06-01: LAD vs NYY 7:05pm"]
+    assert _plain(replies) == ["MLB 2026-06-01: LAD vs NYY 7:05pm"]
+    assert BOLD in replies[0]
+    assert COLOR in replies[0]
+
+
+@pytest.mark.asyncio
+async def test_help_and_error_replies_use_irc_formatting() -> None:
+    router = CommandRouter(client=FakeClient(), settings=settings(), now=fixed_now)
+
+    help_replies = await router.handle_message("@help")
+    error_replies = await router.handle_message("@bogus")
+
+    assert _plain(help_replies) == [
+        "Commands: @mlb, @mlb *, @mlb TEAM, @box, @standings, @wildcard, "
+        "@mlbpitcher, @mlbpitchers, @mlblineup, @sstats, @teamstats, "
+        "@transactions, @leaders, @help <command>"
+    ]
+    assert _plain(error_replies) == ["Unknown command: @bogus. Try @help."]
+    assert BOLD in help_replies[0]
+    assert COLOR in help_replies[0]
+    assert BOLD in error_replies[0]
+    assert COLOR in error_replies[0]
 
 
 @pytest.mark.asyncio
@@ -277,7 +305,7 @@ async def test_mlb_team_tomorrow_uses_team_id() -> None:
     replies = await router.handle_message("@mlb NYY tomorrow")
 
     assert client.schedule_calls == [(date(2026, 6, 1), 147)]
-    assert replies == [
+    assert _plain(replies) == [
         "LAD @ NYY: 7:05 PM EDT at Yankee Stadium (probables: Dodger Arm vs Yankee Arm)"
     ]
 
@@ -289,7 +317,8 @@ async def test_mlb_star_returns_only_live_games() -> None:
 
     replies = await router.handle_message("@mlb *")
 
-    assert replies == ["MLB live: TOR 1-2 BAL Top 3, 1 out"]
+    assert _plain(replies) == ["MLB live: TOR 1-2 BAL Top 3, 1 out"]
+    assert COLOR in replies[0]
 
 
 @pytest.mark.asyncio
@@ -299,7 +328,7 @@ async def test_mlb_star_reports_no_live_games() -> None:
 
     replies = await router.handle_message("@mlb *")
 
-    assert replies == ["MLB live: no games live."]
+    assert _plain(replies) == ["MLB live: no games live."]
 
 
 @pytest.mark.asyncio
@@ -309,11 +338,12 @@ async def test_mlb_live_team_includes_win_probability_and_active_pitchers() -> N
 
     replies = await router.handle_message("@mlb TOR")
 
-    assert replies == [
+    assert _plain(replies) == [
         "TOR @ BAL: TOR 1, BAL 2 Top 3, 1 out | Win: BAL 99%, TOR 0.9% | "
         "P: TOR Spencer Miles 2.1 IP 3 H 1 R 1 ER 1 BB 4 K 46 pit; "
         "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit"
     ]
+    assert ITALIC in replies[0]
 
 
 @pytest.mark.asyncio
@@ -323,7 +353,7 @@ async def test_box_returns_compact_boxscore() -> None:
 
     replies = await router.handle_message("@box TOR")
 
-    assert replies == [
+    assert _plain(replies) == [
         "Box TOR 1-4-0, BAL 2-5-1 Top 3, 1 out | LOB TOR 3, BAL 4 | "
         "Pitching: TOR Reliever One 0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit; "
         "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit"
@@ -337,7 +367,7 @@ async def test_mlb_pitcher_shows_current_team_pitcher() -> None:
 
     replies = await router.handle_message("@mlbpitcher TOR")
 
-    assert replies == [
+    assert _plain(replies) == [
         "TOR game pitcher: TOR Spencer Miles - 2.1 IP, 3 H, 1 R, 1 ER, "
         "1 BB, 4 K, 46 pit (TOR vs BAL, In Progress)"
     ]
@@ -350,7 +380,7 @@ async def test_mlb_pitchers_shows_all_game_pitchers() -> None:
 
     replies = await router.handle_message("@mlbpitchers TOR")
 
-    assert replies == [
+    assert _plain(replies) == [
         "Pitchers: TOR: Spencer Miles 2.1 IP 3 H 1 R 1 ER 1 BB 4 K 46 pit; "
         "Reliever One 0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit | "
         "BAL: Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit",
@@ -364,7 +394,7 @@ async def test_mlb_lineup_shows_requested_team_lineup() -> None:
 
     replies = await router.handle_message("@mlblineup TOR")
 
-    assert replies == [
+    assert _plain(replies) == [
         "TOR lineup: 1. Nathan Lukes LF; 2. Vladimir Guerrero Jr. DH"
     ]
 
@@ -377,7 +407,7 @@ async def test_wildcard_command_requests_wildcard_standings() -> None:
     replies = await router.handle_message("@wildcard AL")
 
     assert client.standings_calls == [(2026, "wildCard", "AL")]
-    assert replies == ["AL wildcard standings: 1. NYY 34-20 +2.0 GB"]
+    assert _plain(replies) == ["AL wildcard standings: 1. NYY 34-20 +2.0 GB"]
 
 
 @pytest.mark.asyncio
@@ -388,7 +418,7 @@ async def test_wildcard_default_returns_both_leagues() -> None:
     replies = await router.handle_message("@wildcard")
 
     assert client.standings_calls == [(2026, "wildCard", None)]
-    assert replies == [
+    assert _plain(replies) == [
         "Wildcard standings: AL: 1. NYY 34-20 +2.0 GB | "
         "NL: 1. LAD 33-21 +1.0 GB"
     ]
@@ -400,7 +430,7 @@ async def test_sstats_returns_candidates_for_ambiguous_player() -> None:
 
     replies = await router.handle_message("@sstats John")
 
-    assert replies == [
+    assert _plain(replies) == [
         "Multiple players matched: John Smith (A Team, P); John Smith Jr. (B Team, CF)"
     ]
 
@@ -413,11 +443,12 @@ async def test_sstats_formats_advanced_season_stats() -> None:
     replies = await router.handle_message("@sstats Shohei Ohtani")
 
     assert client.stats_calls == [("Shohei Ohtani", "hitting", 2026, None, None)]
-    assert replies == [
+    assert _plain(replies) == [
         "Shohei Ohtani 2026 hitting: .300/.390/.600 OPS .990, 12 HR, 40 RBI | "
         "adv: BABIP .330, ISO .300 | sabr: wRC+ 165, WAR 2.4 | "
         "exp: xAVG .310, xSLG .640, xwOBA .420"
     ]
+    assert ITALIC in replies[0]
 
 
 @pytest.mark.asyncio
@@ -430,7 +461,7 @@ async def test_sstats_accepts_day_window() -> None:
     assert client.stats_calls == [
         ("Shohei Ohtani", "hitting", 2026, date(2026, 5, 25), date(2026, 5, 31))
     ]
-    assert replies == [
+    assert _plain(replies) == [
         "Shohei Ohtani last 7 days hitting: .286/.400/.619 OPS 1.019, 2 HR | "
         "adv: ISO .333, K/PA .200"
     ]
@@ -444,7 +475,7 @@ async def test_sstats_defaults_pitchers_to_pitching_stats() -> None:
     replies = await router.handle_message("@sstats Tarik Skubal")
 
     assert client.stats_calls == [("Tarik Skubal", "pitching", 2026, None, None)]
-    assert replies == [
+    assert _plain(replies) == [
         "Tarik Skubal 2026 pitching: 3-2, ERA 2.70, WHIP 0.95, IP 43.1, "
         "K 45 | adv: K/9 9.35, BB/9 1.25 | sabr: FIP 2.07, WAR 1.5 | "
         "exp: xAVG .262, xwOBA .284"
@@ -469,7 +500,7 @@ async def test_leaders_normalizes_category_alias() -> None:
     replies = await router.handle_message("@leaders hr 3")
 
     assert client.leader_calls == [("homeRuns", 2026, 3)]
-    assert replies == ["homeRuns leaders: 1. Slugger 20 (Club)"]
+    assert _plain(replies) == ["homeRuns leaders: 1. Slugger 20 (Club)"]
 
 
 @pytest.mark.asyncio
@@ -483,7 +514,7 @@ async def test_teamstats_defaults_to_hitting_and_pitching() -> None:
         ("TOR", "hitting", 2026, None, None),
         ("TOR", "pitching", 2026, None, None),
     ]
-    assert replies == [
+    assert _plain(replies) == [
         "TOR teamstats 2026: hit: .250/.320/.410 OPS .730, 42 R, 11 HR, "
         "80 H, 6 SB | pitch: ERA 3.50, WHIP 1.20, IP 60.0, K 70, "
         "BB 20, HR 8, K/BB 3.50"
@@ -500,7 +531,7 @@ async def test_teamstats_accepts_group_and_day_window() -> None:
     assert client.team_stats_calls == [
         ("TOR", "hitting", 2026, date(2026, 5, 25), date(2026, 5, 31))
     ]
-    assert replies == [
+    assert _plain(replies) == [
         "TOR teamstats last 7 days: hit: .250/.320/.410 OPS .730, 42 R, "
         "11 HR, 80 H, 6 SB"
     ]
@@ -514,7 +545,7 @@ async def test_transactions_defaults_to_today() -> None:
     replies = await router.handle_message("@transactions")
 
     assert client.transaction_calls == [(date(2026, 5, 31), date(2026, 5, 31), None)]
-    assert replies == [
+    assert _plain(replies) == [
         "MLB transactions 2026-05-31: "
         "Toronto Blue Jays activated RHP Player One from the injured list.; "
         "Toronto Blue Jays optioned RHP Player Two to Buffalo Bisons."
@@ -529,7 +560,7 @@ async def test_transactions_accepts_team_and_day_window() -> None:
     replies = await router.handle_message("@transactions TOR 7 days")
 
     assert client.transaction_calls == [(date(2026, 5, 25), date(2026, 5, 31), 141)]
-    assert replies[0].startswith("TOR transactions 2026-05-25..2026-05-31:")
+    assert _plain(replies)[0].startswith("TOR transactions 2026-05-25..2026-05-31:")
 
 
 def _live_game() -> GameSummary:

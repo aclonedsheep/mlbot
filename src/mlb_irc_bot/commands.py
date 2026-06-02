@@ -3,6 +3,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from re import fullmatch
 
+from mlb_irc_bot import irc_format as irc
 from mlb_irc_bot.config import Settings
 from mlb_irc_bot.mlb.client import (
     MLBAPIError,
@@ -92,12 +93,13 @@ class CommandRouter:
             if command == "help":
                 return self._help(args)
         except MLBAPIError as exc:
-            return [f"MLB API error: {exc}"]
+            return [f"{irc.error('MLB API error')}: {exc}"]
         except ValueError as exc:
-            return [f"Command error: {exc}"]
+            return [f"{irc.error('Command error')}: {exc}"]
         return [
-            f"Unknown command: {self.settings.command_prefix}{command}. "
-            f"Try {self.settings.command_prefix}help."
+            f"{irc.warning('Unknown command')}: "
+            f"{irc.bold(f'{self.settings.command_prefix}{command}')}. "
+            f"Try {irc.bold(f'{self.settings.command_prefix}help')}."
         ]
 
     async def _mlb(self, args: list[str]) -> list[str]:
@@ -125,14 +127,17 @@ class CommandRouter:
         team = self.teams.resolve(args[0])
         if team is None:
             return [
-                f"Unknown team '{args[0]}'. "
+                f"{irc.warning('Unknown team')} '{irc.bold(args[0])}'. "
                 "Try an MLB abbreviation like NYY, LAD, SEA, or BOS."
             ]
 
         target_date = self._date_for(args[1]) if len(args) > 1 else self._date_for("today")
         games = await self.client.get_schedule(target_date, team_id=team.team_id)
         if not games:
-            return [f"{team.abbreviation}: no MLB game found for {target_date.isoformat()}."]
+            return [
+                f"{irc.team(team.abbreviation)}: {irc.muted('no MLB game found')} "
+                f"for {irc.value(target_date.isoformat())}."
+            ]
         game = games[0]
         if game.is_live:
             detail = await self.client.get_game_detail(game.game_pk)
@@ -150,7 +155,10 @@ class CommandRouter:
 
     async def _box(self, args: list[str]) -> list[str]:
         if not args:
-            return [f"Usage: {self.settings.command_prefix}box TEAM [today|yesterday]"]
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}box')} TEAM [today|yesterday]"
+            ]
         if args[0].lower() == "game" and len(args) >= 2 and args[1].isdigit():
             detail = await self.client.get_game_detail(int(args[1]))
             return [format_boxscore(detail, pitchers_by_team(detail))]
@@ -160,8 +168,9 @@ class CommandRouter:
             return [message_or_abbreviation]
         if game.is_upcoming:
             return [
-                f"{message_or_abbreviation}: boxscore is not available yet for "
-                f"{game.away.abbreviation} vs {game.home.abbreviation}."
+                f"{irc.team(message_or_abbreviation)}: boxscore is "
+                f"{irc.muted('not available yet')} for {irc.team(game.away.abbreviation)} "
+                f"vs {irc.team(game.home.abbreviation, home=True)}."
             ]
         detail = await self.client.get_game_detail(game.game_pk)
         return [format_boxscore(detail, pitchers_by_team(detail))]
@@ -209,7 +218,10 @@ class CommandRouter:
             for record in records:
                 if record.team_id == team.team_id:
                     return [format_team_standing(record)]
-            return [f"No standings record found for {team.abbreviation}."]
+            return [
+                f"{irc.muted('No standings record found')} for "
+                f"{irc.team(team.abbreviation)}."
+            ]
         if wildcard:
             title = f"{league} wildcard standings" if league else "Wildcard standings"
         else:
@@ -226,7 +238,7 @@ class CommandRouter:
 
         matches = await self.client.search_people(name)
         if not matches:
-            return [f"No player found for '{name}'."]
+            return [f"{irc.muted('No player found')} for '{irc.bold(name)}'."]
         exact = [player for player in matches if player.full_name.lower() == name.lower()]
         if len(exact) == 1:
             player = exact[0]
@@ -257,7 +269,10 @@ class CommandRouter:
 
     async def _leaders(self, args: list[str]) -> list[str]:
         if not args:
-            return [f"Usage: {self.settings.command_prefix}leaders <category> [limit]"]
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}leaders')} <category> [limit]"
+            ]
         category = normalize_leader_category(args[0])
         limit = 5
         if len(args) > 1 and args[1].isdigit():
@@ -270,7 +285,10 @@ class CommandRouter:
             return [self._teamstats_usage()]
         team = self.teams.resolve(args[0])
         if team is None:
-            return [f"Unknown team '{args[0]}'. Try an MLB abbreviation like NYY or LAD."]
+            return [
+                f"{irc.warning('Unknown team')} '{irc.bold(args[0])}'. "
+                "Try an MLB abbreviation like NYY or LAD."
+            ]
         season, group, window_days, remaining = self._parse_teamstats_args(args[1:])
         if remaining:
             return [self._teamstats_usage()]
@@ -314,52 +332,69 @@ class CommandRouter:
         topic = args[0].lower() if args else ""
         if topic == "mlb":
             return [
-                f"{prefix}mlb [today|tomorrow|yesterday] | "
-                f"{prefix}mlb * | "
-                f"{prefix}mlb TEAM [today|tomorrow|yesterday] | "
-                f"{prefix}mlb game GAMEPK"
+                f"{irc.bold(f'{prefix}mlb')} [today|tomorrow|yesterday] | "
+                f"{irc.bold(f'{prefix}mlb *')} | "
+                f"{irc.bold(f'{prefix}mlb')} TEAM [today|tomorrow|yesterday] | "
+                f"{irc.bold(f'{prefix}mlb game')} GAMEPK"
             ]
         if topic == "box":
-            return [f"{prefix}box TEAM [today|yesterday] or {prefix}box game GAMEPK"]
+            return [
+                f"{irc.bold(f'{prefix}box')} TEAM [today|yesterday] or "
+                f"{irc.bold(f'{prefix}box game')} GAMEPK"
+            ]
         if topic in {"mlbpitcher", "mlbpitchers", "mlblineup"}:
             return [
-                f"{prefix}mlbpitcher TEAM, {prefix}mlbpitchers TEAM, "
-                f"{prefix}mlblineup TEAM"
+                f"{irc.bold(f'{prefix}mlbpitcher')} TEAM, "
+                f"{irc.bold(f'{prefix}mlbpitchers')} TEAM, "
+                f"{irc.bold(f'{prefix}mlblineup')} TEAM"
             ]
         if topic == "standings":
-            return [f"{prefix}standings [AL|NL|TEAM] and {prefix}wildcard [AL|NL|all]"]
+            return [
+                f"{irc.bold(f'{prefix}standings')} [AL|NL|TEAM] and "
+                f"{irc.bold(f'{prefix}wildcard')} [AL|NL|all]"
+            ]
         if topic == "sstats":
             return [
-                f"{prefix}sstats <player name> [hitting|pitching|fielding] "
+                f"{irc.bold(f'{prefix}sstats')} <player name> [hitting|pitching|fielding] "
                 f"[season] [7 days|14 days|30 days]; pitchers default to pitching"
             ]
         if topic == "leaders":
-            return [f"{prefix}leaders <category> [limit], e.g. {prefix}leaders homeRuns 5"]
+            return [
+                f"{irc.bold(f'{prefix}leaders')} <category> [limit], e.g. "
+                f"{irc.bold(f'{prefix}leaders homeRuns 5')}"
+            ]
         if topic == "teamstats":
             return [
-                f"{prefix}teamstats TEAM [hitting|pitching] [season] "
+                f"{irc.bold(f'{prefix}teamstats')} TEAM [hitting|pitching] [season] "
                 "[7 days|14 days|30 days]"
             ]
         if topic == "transactions":
-            return [f"{prefix}transactions [TEAM] [today|yesterday|7 days|YYYY-MM-DD]"]
+            return [
+                f"{irc.bold(f'{prefix}transactions')} "
+                "[TEAM] [today|yesterday|7 days|YYYY-MM-DD]"
+            ]
         return [
-            "Commands: "
-            f"{prefix}mlb, {prefix}mlb *, {prefix}mlb TEAM, {prefix}box, "
-            f"{prefix}standings, {prefix}wildcard, {prefix}mlbpitcher, "
-            f"{prefix}mlbpitchers, {prefix}mlblineup, {prefix}sstats, "
-            f"{prefix}teamstats, {prefix}transactions, {prefix}leaders, "
-            f"{prefix}help <command>"
+            f"{irc.title('Commands')}: "
+            f"{irc.bold(f'{prefix}mlb')}, {irc.bold(f'{prefix}mlb *')}, "
+            f"{irc.bold(f'{prefix}mlb TEAM')}, {irc.bold(f'{prefix}box')}, "
+            f"{irc.bold(f'{prefix}standings')}, {irc.bold(f'{prefix}wildcard')}, "
+            f"{irc.bold(f'{prefix}mlbpitcher')}, {irc.bold(f'{prefix}mlbpitchers')}, "
+            f"{irc.bold(f'{prefix}mlblineup')}, {irc.bold(f'{prefix}sstats')}, "
+            f"{irc.bold(f'{prefix}teamstats')}, {irc.bold(f'{prefix}transactions')}, "
+            f"{irc.bold(f'{prefix}leaders')}, {irc.bold(f'{prefix}help <command>')}"
         ]
 
     def _sstats_usage(self) -> str:
         return (
-            f"Usage: {self.settings.command_prefix}sstats <player name> "
+            f"{irc.warning('Usage')}: "
+            f"{irc.bold(f'{self.settings.command_prefix}sstats')} <player name> "
             "[hitting|pitching|fielding] [season] [7 days|14 days|30 days]"
         )
 
     def _teamstats_usage(self) -> str:
         return (
-            f"Usage: {self.settings.command_prefix}teamstats TEAM "
+            f"{irc.warning('Usage')}: "
+            f"{irc.bold(f'{self.settings.command_prefix}teamstats')} TEAM "
             "[hitting|pitching] [season] [7 days|14 days|30 days]"
         )
 
@@ -465,28 +500,52 @@ class CommandRouter:
         self, args: list[str], command_name: str
     ) -> tuple[GameSummary | None, str]:
         if not args:
-            return None, f"Usage: {self.settings.command_prefix}{command_name} TEAM"
+            return (
+                None,
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}{command_name}')} TEAM",
+            )
         team = self.teams.resolve(args[0])
         if team is None:
-            return None, f"Unknown team '{args[0]}'. Try an MLB abbreviation like NYY or LAD."
+            return (
+                None,
+                f"{irc.warning('Unknown team')} '{irc.bold(args[0])}'. "
+                "Try an MLB abbreviation like NYY or LAD.",
+            )
         target_date = self._date_for("today")
         games = await self.client.get_schedule(target_date, team_id=team.team_id)
         if not games:
-            return None, f"{team.abbreviation}: no MLB game found for {target_date.isoformat()}."
+            return (
+                None,
+                f"{irc.team(team.abbreviation)}: {irc.muted('no MLB game found')} "
+                f"for {irc.value(target_date.isoformat())}.",
+            )
         return games[0], team.abbreviation
 
     async def _game_for_team_on_date(
         self, args: list[str], command_name: str
     ) -> tuple[GameSummary | None, str]:
         if not args:
-            return None, f"Usage: {self.settings.command_prefix}{command_name} TEAM"
+            return (
+                None,
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}{command_name}')} TEAM",
+            )
         team = self.teams.resolve(args[0])
         if team is None:
-            return None, f"Unknown team '{args[0]}'. Try an MLB abbreviation like NYY or LAD."
+            return (
+                None,
+                f"{irc.warning('Unknown team')} '{irc.bold(args[0])}'. "
+                "Try an MLB abbreviation like NYY or LAD.",
+            )
         target_date = self._date_for(args[1]) if len(args) > 1 else self._date_for("today")
         games = await self.client.get_schedule(target_date, team_id=team.team_id)
         if not games:
-            return None, f"{team.abbreviation}: no MLB game found for {target_date.isoformat()}."
+            return (
+                None,
+                f"{irc.team(team.abbreviation)}: {irc.muted('no MLB game found')} "
+                f"for {irc.value(target_date.isoformat())}.",
+            )
         return games[0], team.abbreviation
 
     async def _try_win_probability(self, game_pk: int):

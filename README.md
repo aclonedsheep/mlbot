@@ -24,6 +24,10 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for details.
 
+Live IRC replies use standard IRC bold, italic, and foreground color control codes
+to make teams, states, section labels, and key values easier to scan. The examples
+in this documentation are shown as plaintext.
+
 ## Local Setup
 
 Use Python 3.12. The IRC dependency currently pins an async stack that is not compatible with Python 3.13.
