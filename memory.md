@@ -96,3 +96,10 @@
 - Tests: added regression coverage proving a home run scoring play emits only one HR alert while ordinary scoring plays still emit scoring alerts.
 - Docs: noted that home run scoring plays are posted as HR alerts only.
 - Verification: `python -m pytest tests\unit\test_alert_detectors.py -q` passes; `python -m ruff check src\mlb_irc_bot\alerts\detectors.py tests\unit\test_alert_detectors.py` passes. Full `python -m pytest` is blocked locally because this shell has Python 3.13 and the project's pinned HTTPX stack imports the removed `cgi` module.
+
+## 2026-06-06 - Iteration 13: VPS Deploy Script
+
+- Goal: capture the manual VPS deployment flow in a reusable script.
+- Decisions: add `scripts/deploy.ps1` with defaults for `208.109.241.169`, `/home/wolfb/mlbot`, `main`, and the `mlb-irc-bot` Compose service; keep the script conservative by requiring clean local and remote checkouts.
+- Deploy flow: push with the `aclonedsheep` GitHub CLI credential by default, SSH to the VPS, fast-forward the checkout, rebuild/restart Docker Compose, run app dry-run inside the container, and print container state.
+- Docs: documented the one-command deployment and common options in `docs/DEVELOPMENT.md`.

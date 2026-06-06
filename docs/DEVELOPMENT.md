@@ -25,6 +25,27 @@ Before every substantial git checkpoint:
 2. Run the relevant tests/checks.
 3. Commit with a focused message.
 
+## Deployment
+
+Deploy `main` to the VPS with:
+
+```powershell
+.\scripts\deploy.ps1
+```
+
+The script pushes `main`, SSHes to `208.109.241.169`, fast-forwards
+`/home/wolfb/mlbot`, rebuilds `mlb-irc-bot` with Docker Compose, restarts it,
+and runs `python -m mlb_irc_bot --dry-run` inside the container. It fails if
+the local or remote checkout has uncommitted changes.
+
+Useful options:
+
+```powershell
+.\scripts\deploy.ps1 -SkipPush
+.\scripts\deploy.ps1 -DryRun -AllowDirty
+.\scripts\deploy.ps1 -DeployHost other-host -RemotePath /path/to/mlbot
+```
+
 ## Live API Probes
 
 Normal tests should not require network access. Use this opt-in command for MLB API drift checks:
