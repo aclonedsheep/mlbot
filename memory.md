@@ -88,3 +88,11 @@
 - Goal: reduce visual noise after live review showed the first styled pass was too colorful.
 - Decisions: keep bold/italic for teams, sections, labels, and values; reserve colors for titles, live/error/warning/final/no-data states, and alert prefixes.
 - Verification: Python 3.12.13 `pytest -q -o cache_dir=$env:TEMP\mlbot-pytest-cache --basetemp=$env:TEMP\mlbot-pytest-basetemp` passes with 33 tests; `ruff check .` passes.
+
+## 2026-06-06 - Iteration 12: Consolidated HR And Scoring Alerts
+
+- Goal: prevent duplicate live alerts when a home run is also listed as a scoring play.
+- Decisions: make scoring-play home runs emit the existing `home_run` alert shape and keep standalone home run detection only for home runs absent from `scoringPlays`.
+- Tests: added regression coverage proving a home run scoring play emits only one HR alert while ordinary scoring plays still emit scoring alerts.
+- Docs: noted that home run scoring plays are posted as HR alerts only.
+- Verification: `python -m pytest tests\unit\test_alert_detectors.py -q` passes; `python -m ruff check src\mlb_irc_bot\alerts\detectors.py tests\unit\test_alert_detectors.py` passes. Full `python -m pytest` is blocked locally because this shell has Python 3.13 and the project's pinned HTTPX stack imports the removed `cgi` module.

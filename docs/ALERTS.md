@@ -8,6 +8,7 @@ Alert types are enabled or disabled through environment variables, not IRC comma
 
 - Home runs.
 - Scoring plays and run-scoring state changes.
+- Home run scoring plays are posted as home run alerts only, not duplicate scoring alerts.
 - Bases-loaded situations.
 - Final scores.
 - No-hit and perfect-game bids after five completed innings, then after each later completed inning.

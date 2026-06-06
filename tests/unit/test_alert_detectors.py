@@ -29,7 +29,7 @@ def test_collect_alerts_detects_live_events() -> None:
                 },
             },
             "plays": {
-                "scoringPlays": [0],
+                "scoringPlays": [0, 1],
                 "allPlays": [
                     {
                         "about": {"atBatIndex": 10, "inning": 1, "halfInning": "top"},
@@ -43,6 +43,18 @@ def test_collect_alerts_detects_live_events() -> None:
                             "pitcher": {"id": 50, "fullName": "Pitcher A"},
                         },
                         "playEvents": [{"details": {"isPitch": True}} for _ in range(5)],
+                    },
+                    {
+                        "about": {"atBatIndex": 11, "inning": 1, "halfInning": "top"},
+                        "result": {
+                            "event": "Single",
+                            "eventType": "single",
+                            "description": "Freddie Freeman singles. Will Smith scores.",
+                        },
+                        "matchup": {
+                            "batter": {"fullName": "Freddie Freeman"},
+                            "pitcher": {"id": 50, "fullName": "Pitcher A"},
+                        },
                     },
                     *_strikeout_half_inning(),
                 ],
@@ -97,11 +109,45 @@ def test_collect_alerts_detects_live_events() -> None:
     } <= alert_types
     assert strip_irc_formatting(alerts_by_type["home_run"].message) == "HR: Mookie Betts homers."
     assert (
+        strip_irc_formatting(alerts_by_type["scoring"].message)
+        == "Scoring play: Freddie Freeman singles. Will Smith scores."
+    )
+    assert alerts_by_type["home_run"].key == "999:hr:10"
+    assert alerts_by_type["scoring"].key == "999:score:11"
+    assert (
         strip_irc_formatting(alerts_by_type["bases_loaded"].message)
         == "Bases loaded: Los Angeles Dodgers, Top 6, 1 out(s)."
     )
     assert BOLD in alerts_by_type["home_run"].message
     assert COLOR in alerts_by_type["home_run"].message
+
+
+def test_home_run_scoring_play_is_only_a_home_run_alert() -> None:
+    feed = {
+        "gameData": {"game": {"pk": 999}},
+        "liveData": {
+            "plays": {
+                "scoringPlays": [0],
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 10},
+                        "result": {
+                            "event": "Home Run",
+                            "eventType": "home_run",
+                            "description": "Mookie Betts homers.",
+                        },
+                        "matchup": {"batter": {"fullName": "Mookie Betts"}},
+                    }
+                ],
+            }
+        },
+    }
+
+    alerts = collect_alerts(feed)
+
+    assert [alert.alert_type for alert in alerts] == ["home_run"]
+    assert alerts[0].key == "999:hr:10"
+    assert strip_irc_formatting(alerts[0].message) == "HR: Mookie Betts homers."
 
 
 def _strikeout_half_inning() -> list[dict]:

@@ -9,8 +9,8 @@ JsonDict = dict[str, Any]
 
 def collect_alerts(feed: JsonDict) -> list[Alert]:
     alerts: list[Alert] = []
-    alerts.extend(_home_run_alerts(feed))
     alerts.extend(_scoring_alerts(feed))
+    alerts.extend(_home_run_alerts(feed))
     alerts.extend(_bases_loaded_alerts(feed))
     alerts.extend(_final_alerts(feed))
     alerts.extend(_no_hit_alerts(feed))
@@ -34,22 +34,11 @@ def final_alert_from_summary(summary: Any) -> Alert | None:
 def _home_run_alerts(feed: JsonDict) -> list[Alert]:
     game_pk = _game_pk(feed)
     alerts = []
+    scoring_indices = set(_plays(feed).get("scoringPlays") or [])
     for index, play in enumerate(_all_plays(feed)):
-        result = play.get("result") or {}
-        event = (result.get("eventType") or result.get("event") or "").lower()
-        if event not in {"home_run", "home run"}:
+        if index in scoring_indices or not _is_home_run_play(play):
             continue
-        batter = _person_name(play.get("matchup", {}).get("batter"))
-        description = result.get("description") or f"Home run by {batter}"
-        key = f"{game_pk}:hr:{play.get('about', {}).get('atBatIndex', index)}"
-        alerts.append(
-            Alert(
-                key=key,
-                alert_type="home_run",
-                game_pk=game_pk,
-                message=f"{_alert_label('HR', irc.IRCColor.ORANGE)}: {description}",
-            )
-        )
+        alerts.append(_home_run_alert(game_pk, play, index))
     return alerts
 
 
@@ -58,10 +47,13 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
     plays = _all_plays(feed)
     scoring_indices = set(_plays(feed).get("scoringPlays") or [])
     alerts = []
-    for index in scoring_indices:
+    for index in sorted(scoring_indices):
         if index >= len(plays):
             continue
         play = plays[index]
+        if _is_home_run_play(play):
+            alerts.append(_home_run_alert(game_pk, play, index))
+            continue
         result = play.get("result") or {}
         description = result.get("description") or result.get("event") or "Run scored"
         key = f"{game_pk}:score:{play.get('about', {}).get('atBatIndex', index)}"
@@ -74,6 +66,25 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
             )
         )
     return alerts
+
+
+def _home_run_alert(game_pk: int | None, play: JsonDict, index: int) -> Alert:
+    result = play.get("result") or {}
+    batter = _person_name(play.get("matchup", {}).get("batter"))
+    description = result.get("description") or f"Home run by {batter}"
+    key = f"{game_pk}:hr:{play.get('about', {}).get('atBatIndex', index)}"
+    return Alert(
+        key=key,
+        alert_type="home_run",
+        game_pk=game_pk,
+        message=f"{_alert_label('HR', irc.IRCColor.ORANGE)}: {description}",
+    )
+
+
+def _is_home_run_play(play: JsonDict) -> bool:
+    result = play.get("result") or {}
+    event = (result.get("eventType") or result.get("event") or "").lower()
+    return event in {"home_run", "home run"}
 
 
 def _bases_loaded_alerts(feed: JsonDict) -> list[Alert]:
