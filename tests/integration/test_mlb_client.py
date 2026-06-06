@@ -114,6 +114,85 @@ async def test_game_detail_uses_v11_live_feed() -> None:
     assert detail.last_play == "A live play happened."
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_enrich_home_run_data_matches_savant_play_id() -> None:
+    route = respx.get("https://baseballsavant.mlb.com/leaderboard/home-runs").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "game_pk": "123",
+                    "play_id": "play-hr",
+                    "ct": "24",
+                    "exit_velocity": "105.5",
+                    "launch_angle": "28",
+                    "hr_distance": "412",
+                }
+            ],
+        )
+    )
+    feed = {
+        "gamePk": 123,
+        "gameData": {
+            "game": {"pk": 123},
+            "datetime": {"officialDate": "2026-06-01"},
+        },
+        "liveData": {
+            "plays": {
+                "allPlays": [
+                    {
+                        "result": {"eventType": "home_run"},
+                        "matchup": {"batter": {"id": 660271}},
+                        "playEvents": [
+                            {"playId": "pitch-1"},
+                            {"playId": "play-hr", "hitData": {"launchSpeed": 104}},
+                        ],
+                    }
+                ]
+            }
+        },
+    }
+
+    async with MLBStatsClient() as client:
+        await client.enrich_home_run_data(feed)
+
+    params = parse_qs(urlparse(str(route.calls.last.request.url)).query)
+    assert params["type"] == ["details"]
+    assert params["player_id"] == ["660271"]
+    assert params["year"] == ["2026"]
+    home_run_data = feed["liveData"]["plays"]["allPlays"][0]["homeRunData"]
+    assert home_run_data["parks"] == 24
+    assert home_run_data["otherParks"] == 23
+    assert home_run_data["exitVelocity"] == 105.5
+    assert home_run_data["launchAngle"] == 28.0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_enrich_home_run_data_refreshes_stale_savant_cache() -> None:
+    route = respx.get("https://baseballsavant.mlb.com/leaderboard/home-runs").mock(
+        side_effect=[
+            httpx.Response(200, json=[_savant_home_run_row("old-play", 10)]),
+            httpx.Response(
+                200,
+                json=[
+                    _savant_home_run_row("old-play", 10),
+                    _savant_home_run_row("new-play", 30),
+                ],
+            ),
+        ]
+    )
+
+    async with MLBStatsClient() as client:
+        await client.enrich_home_run_data(_home_run_feed("old-play"))
+        feed = _home_run_feed("new-play")
+        await client.enrich_home_run_data(feed)
+
+    assert route.call_count == 2
+    assert feed["liveData"]["plays"]["allPlays"][0]["homeRunData"]["otherParks"] == 29
+
+
 def _schedule_payload() -> dict:
     return {
         "dates": [
@@ -160,4 +239,36 @@ def _schedule_payload() -> dict:
                 ]
             }
         ]
+    }
+
+
+def _home_run_feed(play_id: str) -> dict:
+    return {
+        "gamePk": 123,
+        "gameData": {
+            "game": {"pk": 123},
+            "datetime": {"officialDate": "2026-06-01"},
+        },
+        "liveData": {
+            "plays": {
+                "allPlays": [
+                    {
+                        "result": {"eventType": "home_run"},
+                        "matchup": {"batter": {"id": 660271}},
+                        "playEvents": [{"playId": play_id, "hitData": {"launchSpeed": 104}}],
+                    }
+                ]
+            }
+        },
+    }
+
+
+def _savant_home_run_row(play_id: str, parks: int) -> dict:
+    return {
+        "game_pk": "123",
+        "play_id": play_id,
+        "ct": str(parks),
+        "exit_velocity": "105.5",
+        "launch_angle": "28",
+        "hr_distance": "412",
     }

@@ -58,18 +58,24 @@ LEADER_ALIASES: dict[str, str] = {
     "so": "strikeouts",
 }
 
+SAVANT_BASE_URL = "https://baseballsavant.mlb.com"
+SAVANT_HOME_RUN_CATEGORY = "xhr"
+
 
 class MLBStatsClient:
     def __init__(
         self,
         *,
         base_url: str = "https://statsapi.mlb.com/api",
+        savant_base_url: str = SAVANT_BASE_URL,
         timeout: float = 10.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.savant_base_url = savant_base_url.rstrip("/")
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._home_run_detail_cache: dict[tuple[int, int, str], list[JsonDict]] = {}
 
     async def close(self) -> None:
         if self._owns_client:
@@ -121,6 +127,29 @@ class MLBStatsClient:
                 fallback[endpoint] = {}
         last_play = self._last_play_from_play_by_play(fallback.get("playByPlay", {}))
         return GameDetail(summary=summary, last_play=last_play, raw=fallback)
+
+    async def enrich_home_run_data(self, feed: JsonDict) -> None:
+        """Attach Savant park counts to home run plays when the public feed has them."""
+        season = _raw_game_year(feed)
+        game_pk = _raw_game_pk(feed)
+        if season is None or game_pk is None:
+            return
+
+        for play in _raw_all_plays(feed):
+            if not _raw_is_home_run_play(play):
+                continue
+            play_id = _batted_ball_play_id(play)
+            batter_id = _safe_int(((play.get("matchup") or {}).get("batter") or {}).get("id"))
+            if not play_id or batter_id is None:
+                continue
+            detail = await self._home_run_detail(
+                batter_id=batter_id,
+                season=season,
+                game_pk=game_pk,
+                play_id=play_id,
+            )
+            if detail:
+                _apply_home_run_detail(play, detail)
 
     async def get_standings(
         self,
@@ -417,8 +446,79 @@ class MLBStatsClient:
         except MLBAPIError:
             return {}
 
+    async def _home_run_detail(
+        self,
+        *,
+        batter_id: int,
+        season: int,
+        game_pk: int,
+        play_id: str,
+    ) -> JsonDict:
+        cache_key = (batter_id, season, SAVANT_HOME_RUN_CATEGORY)
+        had_cached_rows = cache_key in self._home_run_detail_cache
+        rows = await self._home_run_details_for_batter(
+            batter_id,
+            season,
+            category=SAVANT_HOME_RUN_CATEGORY,
+        )
+        detail = _find_home_run_detail(rows, game_pk=game_pk, play_id=play_id)
+        if detail or not had_cached_rows:
+            return detail
+
+        rows = await self._home_run_details_for_batter(
+            batter_id,
+            season,
+            category=SAVANT_HOME_RUN_CATEGORY,
+            refresh=True,
+        )
+        return _find_home_run_detail(rows, game_pk=game_pk, play_id=play_id)
+
+    async def _home_run_details_for_batter(
+        self,
+        batter_id: int,
+        season: int,
+        *,
+        category: str,
+        refresh: bool = False,
+    ) -> list[JsonDict]:
+        cache_key = (batter_id, season, category)
+        if not refresh and cache_key in self._home_run_detail_cache:
+            return self._home_run_detail_cache[cache_key]
+
+        try:
+            payload = await self._get_savant(
+                "/leaderboard/home-runs",
+                params={
+                    "type": "details",
+                    "player_id": batter_id,
+                    "year": season,
+                    "player_type": "Batters",
+                    "cat": category,
+                },
+            )
+        except MLBAPIError:
+            return []
+
+        rows = payload if isinstance(payload, list) else []
+        self._home_run_detail_cache[cache_key] = rows
+        return rows
+
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> JsonDict:
         url = f"{self.base_url}{path}"
+        payload = await self._get_json(url, params=params, label=path)
+        return payload if isinstance(payload, dict) else {}
+
+    async def _get_savant(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        url = f"{self.savant_base_url}{path}"
+        return await self._get_json(url, params=params, label=path)
+
+    async def _get_json(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None,
+        label: str,
+    ) -> Any:
         last_error: Exception | None = None
         for attempt in range(2):
             try:
@@ -429,7 +529,7 @@ class MLBStatsClient:
                 last_error = exc
                 if attempt == 0:
                     await asyncio.sleep(0.25)
-        raise MLBAPIError(f"MLB API request failed for {path}: {last_error}") from last_error
+        raise MLBAPIError(f"MLB API request failed for {label}: {last_error}") from last_error
 
     def _parse_schedule_game(self, game: JsonDict) -> GameSummary:
         teams = game.get("teams", {})
@@ -574,6 +674,89 @@ def normalize_leader_category(category: str) -> str:
     return LEADER_ALIASES.get(compact.lower(), category)
 
 
+def _raw_game_pk(raw: JsonDict) -> int | None:
+    return _safe_int(
+        raw.get("gamePk")
+        or ((raw.get("gameData") or {}).get("game") or {}).get("pk")
+        or raw.get("game_pk")
+        or (raw.get("scheduleGame") or {}).get("gamePk")
+    )
+
+
+def _raw_game_year(raw: JsonDict) -> int | None:
+    date_value = (
+        ((raw.get("gameData") or {}).get("datetime") or {}).get("officialDate")
+        or (raw.get("scheduleGame") or {}).get("officialDate")
+    )
+    if date_value:
+        try:
+            return _parse_date(date_value).year
+        except ValueError:
+            pass
+    for play in _raw_all_plays(raw):
+        start_time = (play.get("about") or {}).get("startTime")
+        if not start_time:
+            continue
+        try:
+            return _parse_datetime(start_time).year
+        except ValueError:
+            continue
+    return None
+
+
+def _raw_all_plays(raw: JsonDict) -> list[JsonDict]:
+    if "playByPlay" in raw:
+        plays = raw.get("playByPlay") or {}
+    else:
+        plays = ((raw.get("liveData") or {}).get("plays") or {})
+    return list(plays.get("allPlays") or [])
+
+
+def _raw_is_home_run_play(play: JsonDict) -> bool:
+    result = play.get("result") or {}
+    event = (result.get("eventType") or result.get("event") or "").lower()
+    return event in {"home_run", "home run"}
+
+
+def _batted_ball_play_id(play: JsonDict) -> str:
+    fallback = ""
+    for event in reversed(play.get("playEvents") or []):
+        play_id = str(event.get("playId") or "")
+        if event.get("hitData") and play_id:
+            return play_id
+        if play_id and not fallback:
+            fallback = play_id
+    return fallback
+
+
+def _apply_home_run_detail(play: JsonDict, detail: JsonDict) -> None:
+    data = dict(play.get("homeRunData") or {})
+    parks = _safe_int(detail.get("ct"))
+    if parks is not None:
+        data["parks"] = parks
+        data["otherParks"] = max(parks - 1, 0)
+
+    exit_velocity = _safe_float(detail.get("exit_velocity"))
+    if exit_velocity is not None:
+        data["exitVelocity"] = exit_velocity
+    launch_angle = _safe_float(detail.get("launch_angle"))
+    if launch_angle is not None:
+        data["launchAngle"] = launch_angle
+    distance = _safe_float(detail.get("hr_distance"))
+    if distance is not None:
+        data["distance"] = distance
+
+    if data:
+        play["homeRunData"] = data
+
+
+def _find_home_run_detail(rows: list[JsonDict], *, game_pk: int, play_id: str) -> JsonDict:
+    for row in rows:
+        if str(row.get("game_pk")) == str(game_pk) and row.get("play_id") == play_id:
+            return row
+    return {}
+
+
 def _raw_linescore(raw: JsonDict) -> JsonDict:
     return ((raw.get("liveData") or {}).get("linescore") or raw.get("linescore") or {})
 
@@ -708,6 +891,24 @@ def _optional_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     return float(value)
+
+
+def _safe_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _int(value: Any) -> int:

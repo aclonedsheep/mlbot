@@ -48,6 +48,7 @@ class LiveScheduler:
             alerts: list[Alert] = []
             try:
                 detail = await self.client.get_game_detail(game.game_pk)
+                await self.client.enrich_home_run_data(detail.raw)
                 alerts.extend(collect_alerts(detail.raw))
             except MLBAPIError:
                 pass

@@ -72,12 +72,14 @@ def _home_run_alert(game_pk: int | None, play: JsonDict, index: int) -> Alert:
     result = play.get("result") or {}
     batter = _person_name(play.get("matchup", {}).get("batter"))
     description = result.get("description") or f"Home run by {batter}"
+    details = _home_run_details(play)
+    detail_text = f" | {details}" if details else ""
     key = f"{game_pk}:hr:{play.get('about', {}).get('atBatIndex', index)}"
     return Alert(
         key=key,
         alert_type="home_run",
         game_pk=game_pk,
-        message=f"{_alert_label('HR', irc.IRCColor.ORANGE)}: {description}",
+        message=f"{_alert_label('HR', irc.IRCColor.ORANGE)}: {description}{detail_text}",
     )
 
 
@@ -96,17 +98,14 @@ def _bases_loaded_alerts(feed: JsonDict) -> list[Alert]:
     inning = linescore.get("currentInning")
     half = linescore.get("inningHalf") or ""
     team = _person_name(offense.get("team")) or "Offense"
+    context = _bases_loaded_context(feed, linescore, offense, team, half, inning)
     key = f"{game_pk}:bases_loaded:{inning}:{half}:{team}"
     return [
         Alert(
             key=key,
             alert_type="bases_loaded",
             game_pk=game_pk,
-            message=(
-                f"{_alert_label('Bases loaded', irc.IRCColor.ORANGE)}: "
-                f"{irc.bold(team)}, {irc.bold(f'{half} {inning}')}, "
-                f"{irc.value(linescore.get('outs', 0))} out(s)."
-            ),
+            message=f"{_alert_label('Bases loaded', irc.IRCColor.ORANGE)}: {context}.",
         )
     ]
 
@@ -247,6 +246,140 @@ def _immaculate_alerts(feed: JsonDict) -> list[Alert]:
             )
         )
     return alerts
+
+
+def _home_run_details(play: JsonDict) -> str:
+    advanced = play.get("homeRunData") or play.get("homeRunDetails") or {}
+    hit_data = _batted_ball_hit_data(play)
+    exit_velocity = _first_float(
+        hit_data.get("launchSpeed"),
+        advanced.get("exitVelocity"),
+        advanced.get("exit_velocity"),
+    )
+    launch_angle = _first_float(
+        hit_data.get("launchAngle"),
+        advanced.get("launchAngle"),
+        advanced.get("launch_angle"),
+    )
+    other_parks = _first_int(advanced.get("otherParks"), advanced.get("other_parks"))
+    if other_parks is None:
+        parks = _first_int(
+            advanced.get("parks"),
+            advanced.get("parkCount"),
+            advanced.get("park_count"),
+            advanced.get("ct"),
+        )
+        if parks is not None:
+            other_parks = max(parks - 1, 0)
+
+    parts = []
+    if exit_velocity is not None:
+        parts.append(f"EV {irc.value(_format_number(exit_velocity))} mph")
+    if launch_angle is not None:
+        parts.append(f"LA {irc.value(_format_number(launch_angle))} deg")
+    if other_parks is not None:
+        parts.append(f"Other parks {irc.value(f'{other_parks}/29')}")
+    return ", ".join(parts)
+
+
+def _batted_ball_hit_data(play: JsonDict) -> JsonDict:
+    if play.get("hitData"):
+        return play.get("hitData") or {}
+    for event in reversed(play.get("playEvents") or []):
+        if event.get("hitData"):
+            return event.get("hitData") or {}
+    return {}
+
+
+def _bases_loaded_context(
+    feed: JsonDict,
+    linescore: JsonDict,
+    offense: JsonDict,
+    team: str,
+    half: str,
+    inning: Any,
+) -> str:
+    parts = [f"{irc.bold(team)} batting"]
+    inning_text = _inning_text(half, inning)
+    if inning_text:
+        parts.append(irc.bold(inning_text))
+    score_text = _score_text(feed, linescore)
+    if score_text:
+        parts.append(score_text)
+    parts.append(irc.value(_outs_text(linescore.get("outs", 0))))
+    batter = _current_batter(feed, offense)
+    if batter:
+        parts.append(f"{irc.bold(batter)} up")
+    return ", ".join(parts)
+
+
+def _inning_text(half: str, inning: Any) -> str:
+    if half and inning:
+        return f"{half} {inning}"
+    if inning:
+        return f"Inning {inning}"
+    return str(half or "")
+
+
+def _score_text(feed: JsonDict, linescore: JsonDict) -> str:
+    teams = linescore.get("teams") or {}
+    away_runs = (teams.get("away") or {}).get("runs")
+    home_runs = (teams.get("home") or {}).get("runs")
+    if away_runs is None and home_runs is None:
+        return ""
+    away_team = _team_abbreviation(feed, "away")
+    home_team = _team_abbreviation(feed, "home")
+    away_score = "-" if away_runs is None else str(away_runs)
+    home_score = "-" if home_runs is None else str(home_runs)
+    return (
+        f"{irc.team(away_team)} {irc.value(away_score)}, "
+        f"{irc.team(home_team, home=True)} {irc.value(home_score)}"
+    )
+
+
+def _outs_text(value: Any) -> str:
+    outs = int(value or 0)
+    suffix = "out" if outs == 1 else "outs"
+    return f"{outs} {suffix}"
+
+
+def _current_batter(feed: JsonDict, offense: JsonDict) -> str:
+    batter = _person_name(offense.get("batter"))
+    if batter:
+        return batter
+    batter = _person_name((_plays(feed).get("currentPlay") or {}).get("matchup", {}).get("batter"))
+    if batter:
+        return batter
+    plays = _all_plays(feed)
+    if not plays:
+        return ""
+    return _person_name((plays[-1].get("matchup") or {}).get("batter"))
+
+
+def _first_float(*values: Any) -> float | None:
+    for value in values:
+        if value is None or value == "":
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _first_int(*values: Any) -> int | None:
+    for value in values:
+        if value is None or value == "":
+            continue
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _format_number(value: float) -> str:
+    return f"{value:.1f}".rstrip("0").rstrip(".")
 
 
 def _pitch_count(play: JsonDict) -> int:

@@ -23,6 +23,7 @@ def test_collect_alerts_detects_live_events() -> None:
                 },
                 "offense": {
                     "team": {"name": "Los Angeles Dodgers"},
+                    "batter": {"fullName": "Shohei Ohtani"},
                     "first": {"id": 1},
                     "second": {"id": 2},
                     "third": {"id": 3},
@@ -42,7 +43,16 @@ def test_collect_alerts_detects_live_events() -> None:
                             "batter": {"fullName": "Mookie Betts"},
                             "pitcher": {"id": 50, "fullName": "Pitcher A"},
                         },
-                        "playEvents": [{"details": {"isPitch": True}} for _ in range(5)],
+                        "playEvents": [
+                            {"details": {"isPitch": True}} for _ in range(4)
+                        ]
+                        + [
+                            {
+                                "details": {"isPitch": True},
+                                "hitData": {"launchSpeed": 105.5, "launchAngle": 28.0},
+                            }
+                        ],
+                        "homeRunData": {"parks": 24},
                     },
                     {
                         "about": {"atBatIndex": 11, "inning": 1, "halfInning": "top"},
@@ -107,7 +117,10 @@ def test_collect_alerts_detects_live_events() -> None:
         "cycle",
         "immaculate",
     } <= alert_types
-    assert strip_irc_formatting(alerts_by_type["home_run"].message) == "HR: Mookie Betts homers."
+    assert (
+        strip_irc_formatting(alerts_by_type["home_run"].message)
+        == "HR: Mookie Betts homers. | EV 105.5 mph, LA 28 deg, Other parks 23/29"
+    )
     assert (
         strip_irc_formatting(alerts_by_type["scoring"].message)
         == "Scoring play: Freddie Freeman singles. Will Smith scores."
@@ -116,7 +129,8 @@ def test_collect_alerts_detects_live_events() -> None:
     assert alerts_by_type["scoring"].key == "999:score:11"
     assert (
         strip_irc_formatting(alerts_by_type["bases_loaded"].message)
-        == "Bases loaded: Los Angeles Dodgers, Top 6, 1 out(s)."
+        == "Bases loaded: Los Angeles Dodgers batting, Top 6, LAD 4, NYY 0, "
+        "1 out, Shohei Ohtani up."
     )
     assert BOLD in alerts_by_type["home_run"].message
     assert COLOR in alerts_by_type["home_run"].message

@@ -15,6 +15,9 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Game context metrics: `/api/v1/game/{gamePk}/contextMetrics` for live win probability.
 - Team stats: `/api/v1/teams/{teamId}/stats` with `season`, `group`, `stats`, and optional date range.
 - Transactions: `/api/v1/transactions` with `sportId`, `teamId`, `startDate`, and `endDate`.
+- Home run park counts: Baseball Savant `/leaderboard/home-runs?type=details&player_id={id}&year={year}&player_type=Batters&cat=xhr`.
+  The bot matches Savant rows to MLB live-feed home run plays by batted-ball `playId`
+  and treats this enrichment as optional.
 
 ## Player Stat Types
 

@@ -6,10 +6,12 @@ Alert types are enabled or disabled through environment variables, not IRC comma
 
 ## Alert Types
 
-- Home runs.
+- Home runs, including exit velocity, launch angle, and Baseball Savant
+  other-park count when those fields are available.
 - Scoring plays and run-scoring state changes.
 - Home run scoring plays are posted as home run alerts only, not duplicate scoring alerts.
-- Bases-loaded situations.
+- Bases-loaded situations, including score, inning, outs, and current batter
+  when the live feed exposes them.
 - Final scores.
 - No-hit and perfect-game bids after five completed innings, then after each later completed inning.
 - Immaculate innings.
