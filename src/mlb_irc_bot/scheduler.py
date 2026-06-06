@@ -49,7 +49,20 @@ class LiveScheduler:
             try:
                 detail = await self.client.get_game_detail(game.game_pk)
                 await self.client.enrich_home_run_data(detail.raw)
-                alerts.extend(collect_alerts(detail.raw))
+                try:
+                    detail.raw["winProbabilityPlays"] = await self.client.get_win_probability_plays(
+                        game.game_pk
+                    )
+                except MLBAPIError:
+                    detail.raw["winProbabilityPlays"] = []
+                alerts.extend(
+                    collect_alerts(
+                        detail.raw,
+                        hard_hit_threshold_mph=self.settings.alert_hard_hit_threshold_mph,
+                        win_probability_threshold=self.settings.alert_win_probability_threshold,
+                        high_leverage_threshold=self.settings.alert_high_leverage_threshold,
+                    )
+                )
             except MLBAPIError:
                 pass
             final_alert = final_alert_from_summary(game)
@@ -81,4 +94,10 @@ class LiveScheduler:
             "immaculate": self.settings.enable_alert_immaculate,
             "cycle_watch": self.settings.enable_alert_cycle,
             "cycle": self.settings.enable_alert_cycle,
+            "win_probability": self.settings.enable_alert_win_probability,
+            "high_leverage": self.settings.enable_alert_high_leverage,
+            "hard_hit": self.settings.enable_alert_hard_hit,
+            "barrel": self.settings.enable_alert_barrel,
+            "late_threat": self.settings.enable_alert_late_threat,
+            "weather": self.settings.enable_alert_weather,
         }.get(alert_type, True)

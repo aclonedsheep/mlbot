@@ -7,10 +7,21 @@ from mlb_irc_bot.alerts.messages import Alert
 JsonDict = dict[str, Any]
 
 
-def collect_alerts(feed: JsonDict) -> list[Alert]:
+def collect_alerts(
+    feed: JsonDict,
+    *,
+    hard_hit_threshold_mph: float = 110.0,
+    win_probability_threshold: float = 15.0,
+    high_leverage_threshold: float = 2.5,
+) -> list[Alert]:
     alerts: list[Alert] = []
     alerts.extend(_scoring_alerts(feed))
     alerts.extend(_home_run_alerts(feed))
+    alerts.extend(_win_probability_alerts(feed, win_probability_threshold))
+    alerts.extend(_high_leverage_alerts(feed, high_leverage_threshold))
+    alerts.extend(_batted_ball_alerts(feed, hard_hit_threshold_mph))
+    alerts.extend(_late_threat_alerts(feed))
+    alerts.extend(_game_info_alerts(feed))
     alerts.extend(_bases_loaded_alerts(feed))
     alerts.extend(_final_alerts(feed))
     alerts.extend(_no_hit_alerts(feed))
@@ -89,6 +100,198 @@ def _is_home_run_play(play: JsonDict) -> bool:
     return event in {"home_run", "home run"}
 
 
+def _win_probability_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    alerts: list[Alert] = []
+    for index, play in enumerate(_win_probability_plays(feed)):
+        added = _home_win_probability_added(play)
+        if added is None or abs(added) < threshold:
+            continue
+        team = _team_abbreviation(feed, "home" if added >= 0 else "away")
+        about = play.get("about") or {}
+        result = play.get("result") or {}
+        description = result.get("description") or result.get("event") or "Win probability swing"
+        key = f"{game_pk}:wp_swing:{about.get('atBatIndex', index)}"
+        alerts.append(
+            Alert(
+                key=key,
+                alert_type="win_probability",
+                game_pk=game_pk,
+                message=(
+                    f"{_alert_label('WP swing', irc.IRCColor.LIGHT_CYAN)}: "
+                    f"{irc.team(team)} {irc.value('+' + _format_percent(abs(added)))} "
+                    f"{_play_inning_text(about)}: "
+                    f"{description}"
+                ),
+            )
+        )
+    return alerts
+
+
+def _high_leverage_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    alerts: list[Alert] = []
+    for index, play in enumerate(_win_probability_plays(feed)):
+        leverage = _first_float(play.get("leverageIndex"))
+        if leverage is None or leverage < threshold:
+            continue
+        about = play.get("about") or {}
+        result = play.get("result") or {}
+        batter = _person_name((play.get("matchup") or {}).get("batter")) or "Batter"
+        description = result.get("description") or result.get("event") or "plate appearance"
+        key = f"{game_pk}:high_leverage:{about.get('atBatIndex', index)}"
+        alerts.append(
+            Alert(
+                key=key,
+                alert_type="high_leverage",
+                game_pk=game_pk,
+                message=(
+                    f"{_alert_label('High leverage', irc.IRCColor.PURPLE)}: "
+                    f"{irc.value(f'LI {_format_number(leverage)}')} "
+                    f"{_play_inning_text(about)}, "
+                    f"{irc.bold(batter)} - {description}"
+                ),
+            )
+        )
+    return alerts
+
+
+def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    alerts: list[Alert] = []
+    for index, play in enumerate(_all_plays(feed)):
+        if _is_home_run_play(play):
+            continue
+        hit_data = _batted_ball_hit_data(play)
+        if not hit_data:
+            continue
+        exit_velocity = _first_float(hit_data.get("launchSpeed"))
+        launch_angle = _first_float(hit_data.get("launchAngle"))
+        distance = _first_float(hit_data.get("totalDistance"))
+        if exit_velocity is None:
+            continue
+        play_id = _batted_ball_play_id(play) or str(
+            (play.get("about") or {}).get("atBatIndex", index)
+        )
+        result = play.get("result") or {}
+        description = result.get("description") or result.get("event") or "Batted ball"
+        details = _batted_ball_details(exit_velocity, launch_angle, distance)
+        if exit_velocity >= hard_hit_threshold:
+            alerts.append(
+                Alert(
+                    key=f"{game_pk}:hard_hit:{play_id}",
+                    alert_type="hard_hit",
+                    game_pk=game_pk,
+                    message=(
+                        f"{_alert_label('Hard hit', irc.IRCColor.ORANGE)}: "
+                        f"{description} | {details}"
+                    ),
+                )
+            )
+        if _is_barrel_or_sweet_spot(exit_velocity, launch_angle):
+            alerts.append(
+                Alert(
+                    key=f"{game_pk}:barrel:{play_id}",
+                    alert_type="barrel",
+                    game_pk=game_pk,
+                    message=(
+                        f"{_alert_label('Barrel', irc.IRCColor.YELLOW)}: "
+                        f"{description} | {details}"
+                    ),
+                )
+            )
+    return alerts
+
+
+def _late_threat_alerts(feed: JsonDict) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    linescore = _linescore(feed)
+    inning = int(linescore.get("currentInning") or 0)
+    if inning < 7:
+        return []
+    offense = linescore.get("offense") or {}
+    offense_team_name = _person_name(offense.get("team")) or "Offense"
+    offense_side = _side_for_team(feed, offense.get("team") or {})
+    if offense_side not in {"away", "home"}:
+        return []
+    defense_side = "home" if offense_side == "away" else "away"
+    teams = linescore.get("teams") or {}
+    offense_runs = _first_int((teams.get(offense_side) or {}).get("runs"))
+    defense_runs = _first_int((teams.get(defense_side) or {}).get("runs"))
+    if offense_runs is None or defense_runs is None:
+        return []
+    runners = sum(1 for base in ("first", "second", "third") if offense.get(base))
+    deficit = defense_runs - offense_runs
+    if deficit < 0:
+        return []
+    if deficit == 0:
+        threat = "go-ahead run at the plate"
+    elif deficit <= runners:
+        threat = "tying run on base"
+    elif deficit == runners + 1:
+        threat = "tying run at the plate"
+    else:
+        return []
+    half = linescore.get("inningHalf") or ""
+    outs = linescore.get("outs", 0)
+    batter = _current_batter(feed, offense) or "batter"
+    score_text = _score_text(feed, linescore)
+    key = f"{game_pk}:late_threat:{inning}:{half}:{outs}:{offense_team_name}:{runners}:{deficit}"
+    return [
+        Alert(
+            key=key,
+            alert_type="late_threat",
+            game_pk=game_pk,
+            message=(
+                f"{_alert_label('Late threat', irc.IRCColor.RED)}: "
+                f"{irc.bold(offense_team_name)} has the {threat}, "
+                f"{_inning_text(half, inning)}, {score_text}, "
+                f"{irc.value(_outs_text(outs))}, {irc.bold(batter)} up."
+            ),
+        )
+    ]
+
+
+def _game_info_alerts(feed: JsonDict) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    game_data = _game_data(feed)
+    weather = game_data.get("weather") or {}
+    game_info = game_data.get("gameInfo") or {}
+    parts = []
+    first_pitch = game_info.get("firstPitch")
+    if first_pitch:
+        first_pitch_text = str(first_pitch).replace("T", " ").replace("Z", " UTC")
+        parts.append(f"first pitch {irc.value(first_pitch_text)}")
+    delay = game_info.get("delayDurationMinutes")
+    if delay:
+        parts.append(f"delay {irc.value(str(delay))} min")
+    weather_bits = []
+    if weather.get("condition"):
+        weather_bits.append(str(weather.get("condition")))
+    if weather.get("temp"):
+        weather_bits.append(f"{weather.get('temp')}F")
+    if weather.get("wind"):
+        weather_bits.append(f"wind {weather.get('wind')}")
+    if weather_bits:
+        parts.append(", ".join(weather_bits))
+    if not parts:
+        return []
+    away = _team_abbreviation(feed, "away")
+    home = _team_abbreviation(feed, "home")
+    return [
+        Alert(
+            key=f"{game_pk}:game_info",
+            alert_type="weather",
+            game_pk=game_pk,
+            message=(
+                f"{_alert_label('Game info', irc.IRCColor.LIGHT_BLUE)}: "
+                f"{irc.team(away)} @ {irc.team(home, home=True)} - "
+                + "; ".join(parts)
+            ),
+        )
+    ]
+
+
 def _bases_loaded_alerts(feed: JsonDict) -> list[Alert]:
     game_pk = _game_pk(feed)
     linescore = _linescore(feed)
@@ -122,6 +325,8 @@ def _final_alerts(feed: JsonDict) -> list[Alert]:
     home_team = _team_abbreviation(feed, "home")
     away_runs = (teams.get("away") or {}).get("runs")
     home_runs = (teams.get("home") or {}).get("runs")
+    star = _top_performer_text(feed)
+    star_text = f" | {star}" if star else ""
     return [
         Alert(
             key=f"{game_pk}:final",
@@ -131,6 +336,7 @@ def _final_alerts(feed: JsonDict) -> list[Alert]:
                 f"{_alert_label('Final', irc.IRCColor.GRAY)}: "
                 f"{irc.team(away_team)} {irc.value(away_runs)}, "
                 f"{irc.team(home_team, home=True)} {irc.value(home_runs)}"
+                f"{star_text}"
             ),
         )
     ]
@@ -299,6 +505,50 @@ def _batted_ball_hit_data(play: JsonDict) -> JsonDict:
     return {}
 
 
+def _batted_ball_play_id(play: JsonDict) -> str:
+    fallback = ""
+    for event in reversed(play.get("playEvents") or []):
+        play_id = str(event.get("playId") or "")
+        if event.get("hitData") and play_id:
+            return play_id
+        if play_id and not fallback:
+            fallback = play_id
+    return fallback
+
+
+def _batted_ball_details(
+    exit_velocity: float,
+    launch_angle: float | None,
+    distance: float | None,
+) -> str:
+    parts = [f"EV {irc.value(_format_number(exit_velocity))} mph"]
+    if launch_angle is not None:
+        parts.append(f"LA {irc.value(_format_number(launch_angle))} deg")
+    if distance is not None:
+        parts.append(f"Dist {irc.value(_format_number(distance))} ft")
+    return ", ".join(parts)
+
+
+def _is_barrel_or_sweet_spot(exit_velocity: float, launch_angle: float | None) -> bool:
+    if launch_angle is None:
+        return False
+    return exit_velocity >= 95 and 8 <= launch_angle <= 32
+
+
+def _win_probability_plays(feed: JsonDict) -> list[JsonDict]:
+    return list(feed.get("winProbabilityPlays") or [])
+
+
+def _home_win_probability_added(play: JsonDict) -> float | None:
+    home_added = _first_float(play.get("homeTeamWinProbabilityAdded"))
+    if home_added is not None:
+        return home_added
+    away_added = _first_float(play.get("awayTeamWinProbabilityAdded"))
+    if away_added is not None:
+        return -away_added
+    return None
+
+
 def _bases_loaded_context(
     feed: JsonDict,
     linescore: JsonDict,
@@ -327,6 +577,10 @@ def _inning_text(half: str, inning: Any) -> str:
     if inning:
         return f"Inning {inning}"
     return str(half or "")
+
+
+def _play_inning_text(about: JsonDict) -> str:
+    return _inning_text(str(about.get("halfInning") or "").title(), about.get("inning"))
 
 
 def _score_text(feed: JsonDict, linescore: JsonDict) -> str:
@@ -390,6 +644,10 @@ def _format_number(value: float) -> str:
     return f"{value:.1f}".rstrip("0").rstrip(".")
 
 
+def _format_percent(value: float) -> str:
+    return f"{value:.1f}%".replace(".0%", "%")
+
+
 def _pitch_count(play: JsonDict) -> int:
     events = play.get("playEvents") or []
     return sum(1 for event in events if (event.get("details") or {}).get("isPitch"))
@@ -434,9 +692,45 @@ def _boxscore_players(feed: JsonDict) -> dict[str, JsonDict]:
     return players
 
 
+def _top_performer_text(feed: JsonDict) -> str:
+    boxscore = ((feed.get("liveData") or {}).get("boxscore") or feed.get("boxscore") or {})
+    performers = boxscore.get("topPerformers") or []
+    if not performers:
+        return ""
+    performer = performers[0]
+    player = performer.get("player") or {}
+    person = player.get("person") or player
+    player_name = _person_name(person)
+    stats = player.get("stats") or {}
+    batting = stats.get("batting") or {}
+    pitching = stats.get("pitching") or {}
+    summary = batting.get("summary") or pitching.get("summary")
+    if not player_name:
+        return ""
+    if summary:
+        return f"{irc.section('Star')}: {irc.bold(player_name)} {summary}"
+    return f"{irc.section('Star')}: {irc.bold(player_name)}"
+
+
 def _team_abbreviation(feed: JsonDict, side: str) -> str:
     team = (((feed.get("gameData") or {}).get("teams") or {}).get(side) or {})
     return team.get("abbreviation") or team.get("teamName") or side.upper()
+
+
+def _side_for_team(feed: JsonDict, team: JsonDict) -> str:
+    team_id = team.get("id")
+    team_name = team.get("name") or team.get("abbreviation")
+    for side in ("away", "home"):
+        raw_team = (((feed.get("gameData") or {}).get("teams") or {}).get(side) or {})
+        if team_id is not None and raw_team.get("id") == team_id:
+            return side
+        if team_name and team_name in {
+            raw_team.get("name"),
+            raw_team.get("abbreviation"),
+            raw_team.get("teamName"),
+        }:
+            return side
+    return ""
 
 
 def _person_name(value: JsonDict | None) -> str:

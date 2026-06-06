@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     enable_alert_no_hitter: bool = True
     enable_alert_immaculate: bool = True
     enable_alert_cycle: bool = True
+    enable_alert_win_probability: bool = True
+    enable_alert_high_leverage: bool = True
+    enable_alert_hard_hit: bool = True
+    enable_alert_barrel: bool = True
+    enable_alert_late_threat: bool = True
+    enable_alert_weather: bool = True
+
+    alert_hard_hit_threshold_mph: float = Field(default=110.0, ge=0)
+    alert_win_probability_threshold: float = Field(default=15.0, ge=0)
+    alert_high_leverage_threshold: float = Field(default=2.5, ge=0)
 
     def zoneinfo(self) -> ZoneInfo:
         return ZoneInfo(self.timezone)

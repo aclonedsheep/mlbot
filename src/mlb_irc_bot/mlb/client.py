@@ -7,21 +7,28 @@ import httpx
 from mlb_irc_bot.mlb.hydrate import SCHEDULE_HYDRATE, schedule_params
 from mlb_irc_bot.mlb.models import (
     GameDetail,
+    GameLogEntry,
     GameSummary,
     JsonDict,
     Leader,
     LinescoreSnapshot,
     LineupEntry,
+    PitchArsenalEntry,
     PitcherInfo,
     PlayerSearchResult,
     PlayerStats,
     StandingTeam,
     TeamInfo,
+    TeamLeaderGroup,
     TeamLineup,
     TeamPitchers,
+    TeamRanking,
     TeamStats,
+    TopPerformer,
     Transaction,
     WinProbability,
+    WinProbabilitySummary,
+    WinProbabilitySwing,
 )
 from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY
 
@@ -31,31 +38,113 @@ class MLBAPIError(RuntimeError):
 
 
 LEADER_GROUPS: dict[str, str] = {
-    "homeRuns": "hitting",
-    "rbi": "hitting",
-    "runs": "hitting",
-    "hits": "hitting",
+    "assists": "fielding",
     "battingAverage": "hitting",
-    "ops": "hitting",
-    "stolenBases": "hitting",
-    "era": "pitching",
-    "wins": "pitching",
-    "strikeouts": "pitching",
-    "strikeOuts": "pitching",
+    "caughtStealing": "hitting",
+    "doubles": "hitting",
+    "earnedRunAverage": "pitching",
+    "extraBaseHits": "hitting",
+    "fieldingPercentage": "fielding",
+    "hits": "hitting",
+    "holds": "pitching",
+    "homeRuns": "hitting",
+    "inningsPitched": "pitching",
+    "onBasePercentage": "hitting",
+    "onBasePlusSlugging": "hitting",
+    "putOuts": "fielding",
+    "rangeFactorPerGame": "fielding",
+    "rangeFactorPer9Inn": "fielding",
+    "runs": "hitting",
+    "runsBattedIn": "hitting",
     "saves": "pitching",
-    "whip": "pitching",
+    "saveOpportunities": "pitching",
+    "sluggingPercentage": "hitting",
+    "stolenBases": "hitting",
+    "stolenBasePercentage": "hitting",
+    "strikeouts": "pitching",
+    "strikeoutsPer9Inn": "pitching",
+    "strikeoutWalkRatio": "pitching",
+    "totalBases": "hitting",
+    "totalBattersFaced": "pitching",
+    "totalPlateAppearances": "hitting",
+    "triples": "hitting",
+    "walks": "hitting",
+    "walksAndHitsPerInningPitched": "pitching",
+    "walksPer9Inn": "pitching",
+    "wins": "pitching",
 }
 
 LEADER_ALIASES: dict[str, str] = {
+    "average": "battingAverage",
+    "avg": "battingAverage",
+    "bb": "walks",
+    "era": "earnedRunAverage",
+    "h": "hits",
     "hr": "homeRuns",
     "home_runs": "homeRuns",
     "homeruns": "homeRuns",
-    "avg": "battingAverage",
-    "average": "battingAverage",
-    "sb": "stolenBases",
+    "ip": "inningsPitched",
     "k": "strikeouts",
+    "k9": "strikeoutsPer9Inn",
+    "k/9": "strikeoutsPer9Inn",
+    "kbb": "strikeoutWalkRatio",
+    "k/bb": "strikeoutWalkRatio",
     "ks": "strikeouts",
+    "obp": "onBasePercentage",
+    "ops": "onBasePlusSlugging",
+    "rbi": "runsBattedIn",
+    "sb": "stolenBases",
+    "slg": "sluggingPercentage",
     "so": "strikeouts",
+    "sv": "saves",
+    "tb": "totalBases",
+    "whip": "walksAndHitsPerInningPitched",
+    "xbh": "extraBaseHits",
+}
+
+ADVANCED_LEADERS: dict[str, tuple[str, str, str, str]] = {
+    "babip": ("seasonAdvanced", "hitting", "babip", "desc"),
+    "fip": ("sabermetrics", "pitching", "fip", "asc"),
+    "fip-": ("sabermetrics", "pitching", "fipMinus", "asc"),
+    "fipminus": ("sabermetrics", "pitching", "fipMinus", "asc"),
+    "iso": ("seasonAdvanced", "hitting", "iso", "desc"),
+    "ra9war": ("sabermetrics", "pitching", "ra9War", "desc"),
+    "war": ("sabermetrics", "hitting", "war", "desc"),
+    "woba": ("sabermetrics", "hitting", "woba", "desc"),
+    "wrc+": ("sabermetrics", "hitting", "wRcPlus", "desc"),
+    "wrcplus": ("sabermetrics", "hitting", "wRcPlus", "desc"),
+    "xavg": ("expectedStatistics", "hitting", "avg", "desc"),
+    "xfip": ("sabermetrics", "pitching", "xfip", "asc"),
+    "xslg": ("expectedStatistics", "hitting", "slg", "desc"),
+    "xwoba": ("expectedStatistics", "hitting", "woba", "desc"),
+}
+
+TEAM_RANKINGS: dict[str, tuple[str, str, str, str]] = {
+    "avg": ("season", "hitting", "avg", "desc"),
+    "era": ("season", "pitching", "era", "asc"),
+    "homeruns": ("season", "hitting", "homeRuns", "desc"),
+    "hr": ("season", "hitting", "homeRuns", "desc"),
+    "k": ("season", "pitching", "strikeOuts", "desc"),
+    "ops": ("season", "hitting", "ops", "desc"),
+    "r": ("season", "hitting", "runs", "desc"),
+    "runs": ("season", "hitting", "runs", "desc"),
+    "sb": ("season", "hitting", "stolenBases", "desc"),
+    "whip": ("season", "pitching", "whip", "asc"),
+}
+
+SITUATION_ALIASES: dict[str, tuple[str, str]] = {
+    "a": ("a", "Away"),
+    "away": ("a", "Away"),
+    "basesloaded": ("r123", "Bases Loaded"),
+    "loaded": ("r123", "Bases Loaded"),
+    "home": ("h", "Home"),
+    "late": ("lc", "Late / Close"),
+    "lateclose": ("lc", "Late / Close"),
+    "risp": ("risp", "Scoring Position"),
+    "vl": ("vl", "vs Left"),
+    "vlhp": ("vl", "vs Left"),
+    "vr": ("vr", "vs Right"),
+    "vrhp": ("vr", "vs Right"),
 }
 
 SAVANT_BASE_URL = "https://baseballsavant.mlb.com"
@@ -217,6 +306,29 @@ class MLBStatsClient:
             home_probability=home_probability,
         )
 
+    async def get_win_probability_plays(self, game_pk: int) -> list[JsonDict]:
+        payload = await self._get_json(
+            f"{self.base_url}/v1/game/{game_pk}/winProbability",
+            params=None,
+            label=f"/v1/game/{game_pk}/winProbability",
+        )
+        return payload if isinstance(payload, list) else []
+
+    async def get_win_probability_summary(
+        self, game_pk: int, summary: GameSummary | None = None
+    ) -> WinProbabilitySummary:
+        plays = await self.get_win_probability_plays(game_pk)
+        if summary is None:
+            game_detail = await self.get_game_detail(game_pk)
+            summary = game_detail.summary
+        current = _win_probability_from_plays(summary, plays)
+        if current is None:
+            current = await self.get_win_probability(game_pk)
+        return WinProbabilitySummary(
+            current=current,
+            biggest_swing=_biggest_win_probability_swing(summary, plays),
+        )
+
     async def search_people(self, name: str) -> list[PlayerSearchResult]:
         payload = await self._get("/v1/people/search", params={"names": name})
         return [
@@ -239,9 +351,28 @@ class MLBStatsClient:
         season: int,
         start_date: date | None = None,
         end_date: date | None = None,
+        games_limit: int | None = None,
     ) -> PlayerStats:
         if (start_date is None) != (end_date is None):
             raise ValueError("start_date and end_date must be supplied together")
+        if games_limit is not None and (start_date or end_date):
+            raise ValueError("games_limit cannot be combined with start_date/end_date")
+
+        if games_limit is not None:
+            stats = await self._get_player_stat_split(
+                player.person_id,
+                stat_type="lastXGames",
+                group=group,
+                season=season,
+                extra_params={"limit": str(games_limit)},
+            )
+            return PlayerStats(
+                player,
+                group,
+                season,
+                stats=stats,
+                games_limit=games_limit,
+            )
 
         if start_date and end_date:
             range_params = {
@@ -308,6 +439,17 @@ class MLBStatsClient:
 
     async def get_leaders(self, category: str, *, season: int, limit: int = 5) -> list[Leader]:
         category = normalize_leader_category(category)
+        advanced = advanced_leader_config(category)
+        if advanced is not None:
+            stat_type, group, stat_key, order = advanced
+            return await self.get_stat_rankings(
+                stat_key,
+                stat_type=stat_type,
+                group=group,
+                season=season,
+                limit=limit,
+                order=order,
+            )
         stat_group = LEADER_GROUPS.get(category, "hitting")
         payload = await self._get(
             "/v1/stats/leaders",
@@ -335,6 +477,45 @@ class MLBStatsClient:
                 )
         return leaders[:limit]
 
+    async def get_stat_rankings(
+        self,
+        stat_key: str,
+        *,
+        stat_type: str,
+        group: str,
+        season: int,
+        limit: int = 5,
+        order: str = "desc",
+        situation_code: str | None = None,
+    ) -> list[Leader]:
+        params: dict[str, Any] = {
+            "stats": stat_type,
+            "group": group,
+            "season": season,
+            "sportIds": 1,
+            "playerPool": "ALL",
+            "limit": limit,
+            "sortStat": stat_key,
+            "order": order,
+        }
+        if situation_code:
+            params["sitCodes"] = situation_code
+        payload = await self._get("/v1/stats", params=params)
+        leaders: list[Leader] = []
+        for split in _stats_splits(payload):
+            player = split.get("player") or split.get("person") or {}
+            team = split.get("team") or {}
+            stat = split.get("stat") or {}
+            leaders.append(
+                Leader(
+                    rank=str(split.get("rank") or len(leaders) + 1),
+                    value=_stat_value(stat, stat_key),
+                    player_name=player.get("fullName") or player.get("name") or "",
+                    team_name=team.get("abbreviation") or team.get("name"),
+                )
+            )
+        return leaders[:limit]
+
     async def get_team_stats(
         self,
         team: TeamInfo,
@@ -343,11 +524,15 @@ class MLBStatsClient:
         season: int,
         start_date: date | None = None,
         end_date: date | None = None,
+        situation_code: str | None = None,
+        situation_label: str | None = None,
     ) -> TeamStats:
         if team.id is None:
             raise ValueError(f"missing MLB team id for {team.abbreviation}")
         if (start_date is None) != (end_date is None):
             raise ValueError("start_date and end_date must be supplied together")
+        if situation_code and (start_date or end_date):
+            raise ValueError("situation splits cannot be combined with date ranges")
 
         params: dict[str, Any] = {
             "season": season,
@@ -355,6 +540,9 @@ class MLBStatsClient:
             "stats": "season",
             "gameType": "R",
         }
+        if situation_code:
+            params["stats"] = "statSplits"
+            params["sitCodes"] = situation_code
         if start_date and end_date:
             params["stats"] = "byDateRange"
             params["startDate"] = start_date.isoformat()
@@ -368,7 +556,191 @@ class MLBStatsClient:
             stats=stat,
             start_date=start_date,
             end_date=end_date,
+            split_label=situation_label,
         )
+
+    async def get_player_split_stats(
+        self,
+        player: PlayerSearchResult,
+        *,
+        group: str,
+        season: int,
+        situation_code: str,
+        situation_label: str,
+    ) -> PlayerStats:
+        stats = await self._get_player_stat_split(
+            player.person_id,
+            stat_type="statSplits",
+            group=group,
+            season=season,
+            extra_params={"sitCodes": situation_code},
+        )
+        return PlayerStats(
+            player=player,
+            group=group,
+            season=season,
+            stats=stats,
+            split_label=situation_label,
+        )
+
+    async def get_player_game_log(
+        self,
+        player: PlayerSearchResult,
+        *,
+        group: str,
+        season: int,
+        limit: int,
+    ) -> list[GameLogEntry]:
+        payload = await self._get(
+            f"/v1/people/{player.person_id}/stats",
+            params={
+                "stats": "gameLog",
+                "group": group,
+                "season": season,
+                "sportId": 1,
+                "gameType": "R",
+            },
+        )
+        entries = [
+            GameLogEntry(
+                date=_parse_date(split.get("date")),
+                opponent=_team_from_team(split.get("opponent") or {}),
+                is_home=split.get("isHome"),
+                stats=split.get("stat") or {},
+            )
+            for split in _stats_splits(payload)
+        ]
+        entries.sort(key=lambda entry: entry.date or date.min, reverse=True)
+        return entries[:limit]
+
+    async def get_player_defense(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> PlayerStats:
+        for group in ("fielding", "hitting"):
+            try:
+                stats = await self._get_player_stat_split(
+                    player.person_id,
+                    stat_type="outsAboveAverage",
+                    group=group,
+                    season=season,
+                )
+            except MLBAPIError:
+                continue
+            if stats:
+                return PlayerStats(player, "fielding", season, stats)
+        return PlayerStats(player, "fielding", season, {})
+
+    async def get_pitch_arsenal(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> list[PitchArsenalEntry]:
+        payload = await self._get(
+            f"/v1/people/{player.person_id}/stats",
+            params={
+                "stats": "pitchArsenal",
+                "group": "pitching",
+                "season": season,
+                "sportId": 1,
+                "gameType": "R",
+            },
+        )
+        entries: list[PitchArsenalEntry] = []
+        for split in _stats_splits(payload):
+            stat = split.get("stat") or {}
+            pitch_type = stat.get("type") or {}
+            entries.append(
+                PitchArsenalEntry(
+                    pitch_type=(
+                        pitch_type.get("description")
+                        or pitch_type.get("code")
+                        or str(pitch_type or "")
+                    ),
+                    count=_optional_int(stat.get("count")),
+                    percentage=_optional_float(stat.get("percentage")),
+                    average_speed=_optional_float(stat.get("averageSpeed")),
+                )
+            )
+        return sorted(entries, key=lambda entry: entry.percentage or 0, reverse=True)
+
+    async def get_team_leaders(
+        self,
+        team: TeamInfo,
+        *,
+        categories: list[str],
+        season: int,
+        limit: int,
+    ) -> list[TeamLeaderGroup]:
+        if team.id is None:
+            raise ValueError(f"missing MLB team id for {team.abbreviation}")
+        normalized = [normalize_leader_category(category) for category in categories]
+        payload = await self._get(
+            f"/v1/teams/{team.id}/leaders",
+            params={
+                "leaderCategories": ",".join(normalized),
+                "season": season,
+                "leaderGameTypes": "R",
+                "limit": limit,
+            },
+        )
+        groups: list[TeamLeaderGroup] = []
+        for group in payload.get("teamLeaders") or []:
+            leaders = []
+            for leader in group.get("leaders") or []:
+                person = leader.get("person") or {}
+                leaders.append(
+                    Leader(
+                        rank=str(leader.get("rank") or ""),
+                        value=str(leader.get("value") or ""),
+                        player_name=person.get("fullName") or person.get("name") or "",
+                        team_name=team.abbreviation,
+                    )
+                )
+            groups.append(
+                TeamLeaderGroup(
+                    category=str(group.get("leaderCategory") or ""),
+                    leaders=tuple(leaders[:limit]),
+                )
+            )
+        return groups
+
+    async def get_team_rankings(
+        self,
+        category: str,
+        *,
+        season: int,
+        group: str | None = None,
+        limit: int = 5,
+    ) -> list[TeamRanking]:
+        stat_type, default_group, stat_key, order = team_ranking_config(category)
+        group = group or default_group
+        payload = await self._get(
+            "/v1/teams/stats",
+            params={
+                "season": season,
+                "sportIds": 1,
+                "group": group,
+                "stats": stat_type,
+                "sortStat": stat_key,
+                "order": order,
+            },
+        )
+        rankings: list[TeamRanking] = []
+        for split in _stats_splits(payload):
+            stat = split.get("stat") or {}
+            rankings.append(
+                TeamRanking(
+                    rank=str(split.get("rank") or len(rankings) + 1),
+                    team=_team_from_team(split.get("team") or {}),
+                    value=_stat_value(stat, stat_key),
+                    stats=stat,
+                )
+            )
+        return rankings[:limit]
 
     async def get_transactions(
         self,
@@ -669,9 +1041,61 @@ def lineup_for_team(detail: GameDetail, team_id: int) -> TeamLineup | None:
     return None
 
 
+def top_performers(detail: GameDetail, *, limit: int = 3) -> list[TopPerformer]:
+    boxscore = _raw_boxscore(detail.raw)
+    performers: list[TopPerformer] = []
+    for item in boxscore.get("topPerformers") or []:
+        player = item.get("player") or {}
+        person = player.get("person") or player
+        player_id = _optional_int(person.get("id"))
+        team = _team_for_player_id(boxscore, player_id)
+        stats = player.get("stats") or {}
+        performers.append(
+            TopPerformer(
+                player_name=_name(person),
+                performer_type=str(item.get("type") or ""),
+                game_score=_optional_int(item.get("gameScore")),
+                team=team,
+                batting_stats=stats.get("batting") or {},
+                pitching_stats=stats.get("pitching") or {},
+            )
+        )
+    return performers[:limit]
+
+
 def normalize_leader_category(category: str) -> str:
     compact = category.strip().replace("-", "_")
     return LEADER_ALIASES.get(compact.lower(), category)
+
+
+def advanced_leader_config(category: str) -> tuple[str, str, str, str] | None:
+    compact = category.strip().replace("-", "").replace("_", "").lower()
+    return ADVANCED_LEADERS.get(category.lower()) or ADVANCED_LEADERS.get(compact)
+
+
+def team_ranking_config(category: str) -> tuple[str, str, str, str]:
+    compact = category.strip().replace("-", "").replace("_", "").lower()
+    normalized = LEADER_ALIASES.get(category.strip().replace("-", "_").lower(), compact)
+    if compact in TEAM_RANKINGS:
+        return TEAM_RANKINGS[compact]
+    if normalized in TEAM_RANKINGS:
+        return TEAM_RANKINGS[normalized]
+    if normalized in LEADER_GROUPS:
+        group = LEADER_GROUPS[normalized]
+        lower_is_better = {"earnedRunAverage", "walksAndHitsPerInningPitched"}
+        order = "asc" if normalized in lower_is_better else "desc"
+        stat_key = {
+            "earnedRunAverage": "era",
+            "onBasePlusSlugging": "ops",
+            "walksAndHitsPerInningPitched": "whip",
+        }.get(normalized, normalized)
+        return "season", group, stat_key, order
+    raise ValueError(f"unknown team ranking category '{category}'")
+
+
+def situation_code(value: str) -> tuple[str, str] | None:
+    compact = value.strip().replace("-", "").replace("_", "").lower()
+    return SITUATION_ALIASES.get(compact)
 
 
 def _raw_game_pk(raw: JsonDict) -> int | None:
@@ -765,6 +1189,16 @@ def _raw_boxscore(raw: JsonDict) -> JsonDict:
     return ((raw.get("liveData") or {}).get("boxscore") or raw.get("boxscore") or {})
 
 
+def _team_for_player_id(boxscore: JsonDict, player_id: int | None) -> TeamInfo | None:
+    if player_id is None:
+        return None
+    for side in ("away", "home"):
+        side_data = ((boxscore.get("teams") or {}).get(side) or {})
+        if _player_record(side_data.get("players") or {}, player_id):
+            return _team_from_team(side_data.get("team") or {})
+    return None
+
+
 def _raw_game_team(raw: JsonDict, side: str) -> JsonDict:
     return (((raw.get("gameData") or {}).get("teams") or {}).get(side) or {})
 
@@ -839,6 +1273,66 @@ def _parse_transaction(transaction: JsonDict) -> Transaction:
             else None
         ),
     )
+
+
+def _stats_splits(payload: JsonDict) -> list[JsonDict]:
+    return [
+        split
+        for stat_group in payload.get("stats") or ()
+        for split in stat_group.get("splits") or ()
+    ]
+
+
+def _stat_value(stat: JsonDict, key: str) -> str:
+    value = stat.get(key)
+    return "" if value is None else str(value)
+
+
+def _win_probability_from_plays(
+    summary: GameSummary, plays: list[JsonDict]
+) -> WinProbability | None:
+    if not plays:
+        return None
+    latest = plays[-1]
+    away_probability = _optional_float(latest.get("awayTeamWinProbability"))
+    home_probability = _optional_float(latest.get("homeTeamWinProbability"))
+    if away_probability is None and home_probability is None:
+        return None
+    return WinProbability(
+        away=summary.away,
+        home=summary.home,
+        away_probability=away_probability,
+        home_probability=home_probability,
+    )
+
+
+def _biggest_win_probability_swing(
+    summary: GameSummary, plays: list[JsonDict]
+) -> WinProbabilitySwing | None:
+    biggest: WinProbabilitySwing | None = None
+    for play in plays:
+        home_added = _optional_float(play.get("homeTeamWinProbabilityAdded"))
+        away_added = _optional_float(play.get("awayTeamWinProbabilityAdded"))
+        if home_added is None and away_added is None:
+            continue
+        if home_added is None and away_added is not None:
+            home_added = -away_added
+        if home_added is None:
+            continue
+        team = summary.home if home_added >= 0 else summary.away
+        value = abs(home_added)
+        result = play.get("result") or {}
+        about = play.get("about") or {}
+        swing = WinProbabilitySwing(
+            team=team,
+            probability_added=value,
+            description=str(result.get("description") or result.get("event") or ""),
+            inning=_optional_int(about.get("inning")),
+            half_inning=str(about.get("halfInning") or ""),
+        )
+        if biggest is None or swing.probability_added > biggest.probability_added:
+            biggest = swing
+    return biggest
 
 
 def _parse_linescore(data: JsonDict) -> LinescoreSnapshot | None:

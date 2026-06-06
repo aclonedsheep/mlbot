@@ -8,15 +8,21 @@ from mlb_irc_bot.commands import CommandRouter
 from mlb_irc_bot.irc_format import BOLD, COLOR, ITALIC, strip_irc_formatting
 from mlb_irc_bot.mlb.models import (
     GameDetail,
+    GameLogEntry,
     GameSummary,
     Leader,
+    PitchArsenalEntry,
     PlayerSearchResult,
     PlayerStats,
     StandingTeam,
     TeamInfo,
+    TeamLeaderGroup,
+    TeamRanking,
     TeamStats,
     Transaction,
     WinProbability,
+    WinProbabilitySummary,
+    WinProbabilitySwing,
 )
 
 
@@ -65,6 +71,25 @@ class FakeClient:
             home=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
             away_probability=0.9,
             home_probability=99.1,
+        )
+
+    async def get_win_probability_summary(
+        self, game_pk: int, game: GameSummary
+    ) -> WinProbabilitySummary:
+        return WinProbabilitySummary(
+            current=WinProbability(
+                away=game.away,
+                home=game.home,
+                away_probability=35.0,
+                home_probability=65.0,
+            ),
+            biggest_swing=WinProbabilitySwing(
+                team=game.home,
+                probability_added=18.4,
+                description="Clutch hit scores two.",
+                inning=8,
+                half_inning="bottom",
+            ),
         )
 
     async def get_standings(self, *, season: int, standings_type: str, league: str | None):
@@ -128,8 +153,23 @@ class FakeClient:
         season: int,
         start_date: date | None = None,
         end_date: date | None = None,
+        games_limit: int | None = None,
     ):
         self.stats_calls.append((player.full_name, group, season, start_date, end_date))
+        if games_limit is not None:
+            return PlayerStats(
+                player,
+                group,
+                season,
+                {
+                    "avg": ".400",
+                    "obp": ".455",
+                    "slg": ".800",
+                    "ops": "1.255",
+                    "homeRuns": 3,
+                },
+                games_limit=games_limit,
+            )
         if start_date and end_date:
             return PlayerStats(
                 player,
@@ -174,6 +214,46 @@ class FakeClient:
             expected_stats={"avg": ".310", "slg": ".640", "woba": ".420"},
         )
 
+    async def get_player_split_stats(
+        self,
+        player: PlayerSearchResult,
+        *,
+        group: str,
+        season: int,
+        situation_code: str,
+        situation_label: str,
+    ):
+        return PlayerStats(
+            player,
+            group,
+            season,
+            {"avg": ".333", "obp": ".444", "slg": ".667", "ops": "1.111", "rbi": 12},
+            split_label=situation_label,
+        )
+
+    async def get_player_game_log(
+        self,
+        player: PlayerSearchResult,
+        *,
+        group: str,
+        season: int,
+        limit: int,
+    ):
+        return [
+            GameLogEntry(
+                date=date(2026, 5, 31),
+                opponent=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
+                is_home=False,
+                stats={"summary": "2-4 | HR, 3 RBI"},
+            ),
+            GameLogEntry(
+                date=date(2026, 5, 30),
+                opponent=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
+                is_home=True,
+                stats={"summary": "1-3 | BB"},
+            ),
+        ][:limit]
+
     async def get_leaders(self, category: str, *, season: int, limit: int):
         self.leader_calls.append((category, season, limit))
         return [Leader(rank="1", value="20", player_name="Slugger", team_name="Club")]
@@ -186,8 +266,25 @@ class FakeClient:
         season: int,
         start_date: date | None = None,
         end_date: date | None = None,
+        situation_code: str | None = None,
+        situation_label: str | None = None,
     ):
         self.team_stats_calls.append((team.abbreviation, group, season, start_date, end_date))
+        if situation_code:
+            return TeamStats(
+                team,
+                group,
+                season,
+                {
+                    "avg": ".300",
+                    "obp": ".380",
+                    "slg": ".500",
+                    "ops": ".880",
+                    "runs": 22,
+                    "homeRuns": 5,
+                },
+                split_label=situation_label,
+            )
         if group == "pitching":
             return TeamStats(
                 team,
@@ -222,6 +319,60 @@ class FakeClient:
             start_date=start_date,
             end_date=end_date,
         )
+
+    async def get_team_rankings(
+        self,
+        category: str,
+        *,
+        season: int,
+        group: str | None = None,
+        limit: int,
+    ):
+        return [
+            TeamRanking(
+                rank="1",
+                team=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
+                value=".800",
+            ),
+            TeamRanking(
+                rank="2",
+                team=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
+                value=".760",
+            ),
+        ][:limit]
+
+    async def get_team_leaders(
+        self,
+        team: TeamInfo,
+        *,
+        categories: list[str],
+        season: int,
+        limit: int,
+    ):
+        return [
+            TeamLeaderGroup(
+                category=categories[0],
+                leaders=(Leader("1", "12", "Team Slugger", team.abbreviation),),
+            )
+        ]
+
+    async def get_player_defense(self, player: PlayerSearchResult, *, season: int):
+        return PlayerStats(
+            player,
+            "fielding",
+            season,
+            {
+                "totalOutsAboveAverage": 5,
+                "fieldingRunsPrevented": 4,
+                "attempts": 80,
+            },
+        )
+
+    async def get_pitch_arsenal(self, player: PlayerSearchResult, *, season: int):
+        return [
+            PitchArsenalEntry("Four-Seam Fastball", count=120, percentage=55.5, average_speed=96.4),
+            PitchArsenalEntry("Slider", count=70, percentage=32.1, average_speed=86.2),
+        ]
 
     async def get_transactions(
         self,
@@ -286,9 +437,10 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
     error_replies = await router.handle_message("@bogus")
 
     assert _plain(help_replies) == [
-        "Commands: @mlb, @mlb *, @mlb TEAM, @box, @standings, @wildcard, "
-        "@mlbpitcher, @mlbpitchers, @mlblineup, @sstats, @teamstats, "
-        "@transactions, @leaders, @help <command>"
+        "Commands: @mlb, @mlb *, @mlb TEAM, @box, @wp, @stars, @weather, "
+        "@replay, @standings, @wildcard, @mlbpitcher, @mlbpitchers, "
+        "@mlblineup, @sstats, @gamelog, @splits, @teamstats, @teamrank, "
+        "@teamleaders, @defense, @arsenal, @transactions, @leaders, @help <command>"
     ]
     assert _plain(error_replies) == ["Unknown command: @bogus. Try @help."]
     assert BOLD in help_replies[0]
@@ -356,8 +508,31 @@ async def test_box_returns_compact_boxscore() -> None:
     assert _plain(replies) == [
         "Box TOR 1-4-0, BAL 2-5-1 Top 3, 1 out | LOB TOR 3, BAL 4 | "
         "Pitching: TOR Reliever One 0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit; "
-        "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit"
+        "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit | "
+        "Stars: TOR Vladimir Guerrero Jr. GS 78 - 2-4 | HR, 3 RBI | "
+        "Swing: BAL +18.4% Bottom 8 - Clutch hit scores two."
     ]
+
+
+@pytest.mark.asyncio
+async def test_wp_stars_weather_and_replay_commands() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    wp = await router.handle_message("@wp TOR")
+    stars = await router.handle_message("@stars TOR")
+    weather = await router.handle_message("@weather TOR")
+    replay = await router.handle_message("@replay TOR")
+
+    assert _plain(wp) == [
+        "WP TOR @ BAL: Now: BAL 65%, TOR 35% | "
+        "Swing: BAL +18.4% Bottom 8 - Clutch hit scores two."
+    ]
+    assert _plain(stars) == [
+        "Stars TOR @ BAL: TOR Vladimir Guerrero Jr. GS 78 - 2-4 | HR, 3 RBI"
+    ]
+    assert _plain(weather) == ["Weather TOR @ BAL: Sunny, 82F, wind 3 mph, L To R"]
+    assert _plain(replay) == ["Replay TOR @ BAL: TOR 1 left, 1 used; BAL 1 left, 0 used"]
 
 
 @pytest.mark.asyncio
@@ -468,6 +643,36 @@ async def test_sstats_accepts_day_window() -> None:
 
 
 @pytest.mark.asyncio
+async def test_sstats_accepts_last_games_window() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@sstats Shohei Ohtani hitting last 3 games")
+
+    assert _plain(replies) == [
+        "Shohei Ohtani last 3 games hitting: .400/.455/.800 OPS 1.255, 3 HR"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_gamelog_and_splits_commands() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    gamelog = await router.handle_message("@gamelog Shohei Ohtani 2")
+    splits = await router.handle_message("@splits Shohei Ohtani risp")
+
+    assert _plain(gamelog) == [
+        "Shohei Ohtani last 2 games hitting: "
+        "05-31 @ BAL: 2-4 | HR, 3 RBI; 05-30 vs BAL: 1-3 | BB"
+    ]
+    assert _plain(splits) == [
+        "Shohei Ohtani 2026 Scoring Position hitting: "
+        ".333/.444/.667 OPS 1.111, 12 RBI"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_sstats_defaults_pitchers_to_pitching_stats() -> None:
     client = FakeClient()
     router = CommandRouter(client=client, settings=settings(), now=fixed_now)
@@ -534,6 +739,32 @@ async def test_teamstats_accepts_group_and_day_window() -> None:
     assert _plain(replies) == [
         "TOR teamstats last 7 days: hit: .250/.320/.410 OPS .730, 42 R, "
         "11 HR, 80 H, 6 SB"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_team_split_rank_leaders_defense_and_arsenal_commands() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    team_split = await router.handle_message("@teamstats TOR hitting risp")
+    team_rank = await router.handle_message("@teamrank ops 2")
+    team_leaders = await router.handle_message("@teamleaders TOR hr")
+    defense = await router.handle_message("@defense Shohei Ohtani")
+    arsenal = await router.handle_message("@arsenal Tarik Skubal")
+
+    assert _plain(team_split) == [
+        "TOR teamstats 2026 Scoring Position: hit: .300/.380/.500 OPS .880, "
+        "22 R, 5 HR"
+    ]
+    assert _plain(team_rank) == ["ops team rankings: 1. TOR .800; 2. BAL .760"]
+    assert _plain(team_leaders) == ["TOR leaders: homeRuns: Team Slugger 12"]
+    assert _plain(defense) == [
+        "Shohei Ohtani 2026 defense: OAA 5, Runs Prevented 4, Att 80"
+    ]
+    assert _plain(arsenal) == [
+        "Tarik Skubal arsenal: Four-Seam Fastball 55.5%, 96.4 mph, 120 pit; "
+        "Slider 32.1%, 86.2 mph, 70 pit"
     ]
 
 
@@ -619,6 +850,11 @@ def _live_detail() -> GameDetail:
         summary=_live_game(),
         raw={
             "gameData": {
+                "weather": {"condition": "Sunny", "temp": "82", "wind": "3 mph, L To R"},
+                "review": {
+                    "away": {"used": 1, "remaining": 1},
+                    "home": {"used": 0, "remaining": 1},
+                },
                 "teams": {
                     "away": {"id": 141, "name": "Toronto Blue Jays", "abbreviation": "TOR"},
                     "home": {"id": 110, "name": "Baltimore Orioles", "abbreviation": "BAL"},
@@ -640,6 +876,19 @@ def _live_detail() -> GameDetail:
                     },
                 },
                 "boxscore": {
+                    "topPerformers": [
+                        {
+                            "type": "hitter",
+                            "gameScore": 78,
+                            "player": {
+                                "person": {"id": 665489, "fullName": "Vladimir Guerrero Jr."},
+                                "stats": {
+                                    "batting": {"summary": "2-4 | HR, 3 RBI"},
+                                    "pitching": {},
+                                },
+                            },
+                        }
+                    ],
                     "teams": {
                         "away": {
                             "team": {"id": 141, "name": "Toronto Blue Jays"},

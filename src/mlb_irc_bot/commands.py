@@ -13,31 +13,52 @@ from mlb_irc_bot.mlb.client import (
     lineup_for_team,
     normalize_leader_category,
     pitchers_by_team,
+    situation_code,
+    top_performers,
 )
 from mlb_irc_bot.mlb.formatters import (
     format_boxscore,
     format_compact_schedule,
     format_current_pitcher,
+    format_defense,
     format_game_detail,
+    format_game_log,
     format_game_summary,
     format_leaders,
     format_lineup,
+    format_pitch_arsenal,
     format_pitchers,
     format_player_candidates,
     format_player_stats,
     format_probable_pitchers,
+    format_replay,
     format_standings,
+    format_team_leaders,
+    format_team_rankings,
     format_team_standing,
     format_team_stats,
+    format_top_performers,
     format_transactions,
+    format_weather,
+    format_win_probability_summary,
 )
-from mlb_irc_bot.mlb.models import GameSummary, TeamInfo
+from mlb_irc_bot.mlb.models import GameDetail, GameSummary, PlayerSearchResult, TeamInfo
 from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY, TeamDirectory, TeamRecord
 
 DATE_WORDS = {"today", "tomorrow", "yesterday"}
 STAT_GROUPS = {"hitting", "pitching", "fielding"}
 STAT_WINDOW_WORDS = {"day", "days"}
+GAME_WINDOW_WORDS = {"game", "games"}
 MAX_STAT_WINDOW_DAYS = 60
+MAX_LAST_GAMES = 30
+DEFAULT_TEAM_LEADER_CATEGORIES = [
+    "homeRuns",
+    "runsBattedIn",
+    "onBasePlusSlugging",
+    "earnedRunAverage",
+    "strikeouts",
+    "saves",
+]
 
 
 class CommandRouter:
@@ -72,6 +93,14 @@ class CommandRouter:
                 return await self._mlb(args)
             if command == "box":
                 return await self._box(args)
+            if command == "wp":
+                return await self._wp(args)
+            if command == "stars":
+                return await self._stars(args)
+            if command == "weather":
+                return await self._weather(args)
+            if command == "replay":
+                return await self._replay(args)
             if command == "mlbpitcher":
                 return await self._mlb_pitcher(args)
             if command == "mlbpitchers":
@@ -84,10 +113,22 @@ class CommandRouter:
                 return await self._standings(args, wildcard=True)
             if command == "sstats":
                 return await self._season_stats(args)
+            if command == "gamelog":
+                return await self._game_log(args)
+            if command == "splits":
+                return await self._splits(args)
             if command == "leaders":
                 return await self._leaders(args)
             if command == "teamstats":
                 return await self._team_stats(args)
+            if command == "teamrank":
+                return await self._team_rank(args)
+            if command == "teamleaders":
+                return await self._team_leaders(args)
+            if command == "defense":
+                return await self._defense(args)
+            if command == "arsenal":
+                return await self._arsenal(args)
             if command == "transactions":
                 return await self._transactions(args)
             if command == "help":
@@ -119,7 +160,13 @@ class CommandRouter:
 
         if first == "game" and len(args) >= 2 and args[1].isdigit():
             detail = await self.client.get_game_detail(int(args[1]))
-            return format_game_detail(detail, self.settings.zoneinfo())
+            return format_game_detail(
+                detail,
+                self.settings.zoneinfo(),
+                win_probability_summary=await self._try_win_probability_summary(
+                    detail.summary.game_pk, detail.summary
+                ),
+            )
 
         if first in DATE_WORDS or _is_iso_date(first):
             return await self._schedule_for_date(self._date_for(first))
@@ -161,7 +208,16 @@ class CommandRouter:
             ]
         if args[0].lower() == "game" and len(args) >= 2 and args[1].isdigit():
             detail = await self.client.get_game_detail(int(args[1]))
-            return [format_boxscore(detail, pitchers_by_team(detail))]
+            return [
+                format_boxscore(
+                    detail,
+                    pitchers_by_team(detail),
+                    top_performers=top_performers(detail),
+                    win_probability_summary=await self._try_win_probability_summary(
+                        detail.summary.game_pk, detail.summary
+                    ),
+                )
+            ]
 
         game, message_or_abbreviation = await self._game_for_team_on_date(args, "box")
         if game is None:
@@ -173,7 +229,41 @@ class CommandRouter:
                 f"vs {irc.team(game.home.abbreviation, home=True)}."
             ]
         detail = await self.client.get_game_detail(game.game_pk)
-        return [format_boxscore(detail, pitchers_by_team(detail))]
+        return [
+            format_boxscore(
+                detail,
+                pitchers_by_team(detail),
+                top_performers=top_performers(detail),
+                win_probability_summary=await self._try_win_probability_summary(
+                    detail.summary.game_pk, detail.summary
+                ),
+            )
+        ]
+
+    async def _wp(self, args: list[str]) -> list[str]:
+        game, message = await self._detail_game_from_args(args, "wp", allow_upcoming=False)
+        if game is None:
+            return [message]
+        summary = await self.client.get_win_probability_summary(game.game_pk, game)
+        return [format_win_probability_summary(game, summary)]
+
+    async def _stars(self, args: list[str]) -> list[str]:
+        detail, message = await self._detail_from_args(args, "stars", allow_upcoming=False)
+        if detail is None:
+            return [message]
+        return [format_top_performers(detail.summary, top_performers(detail))]
+
+    async def _weather(self, args: list[str]) -> list[str]:
+        detail, message = await self._detail_from_args(args, "weather", allow_upcoming=True)
+        if detail is None:
+            return [message]
+        return [format_weather(detail)]
+
+    async def _replay(self, args: list[str]) -> list[str]:
+        detail, message = await self._detail_from_args(args, "replay", allow_upcoming=False)
+        if detail is None:
+            return [message]
+        return [format_replay(detail)]
 
     async def _mlb_pitcher(self, args: list[str]) -> list[str]:
         game, team_abbreviation = await self._today_game_for_team(args, "mlbpitcher")
@@ -231,7 +321,7 @@ class CommandRouter:
     async def _season_stats(self, args: list[str]) -> list[str]:
         if not args:
             return [self._sstats_usage()]
-        season, requested_group, window_days, remaining = self._parse_sstats_args(args)
+        season, requested_group, window_days, games_limit, remaining = self._parse_sstats_args(args)
         name = " ".join(remaining).strip()
         if not name:
             return [self._sstats_usage()]
@@ -258,12 +348,59 @@ class CommandRouter:
         if window_days is not None:
             end_date = self.now().date()
             start_date = end_date - timedelta(days=window_days - 1)
-        stats = await self.client.get_player_stats(
-            player,
+        stat_kwargs = {
+            "group": group,
+            "season": season,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+        if games_limit is not None:
+            stat_kwargs["games_limit"] = games_limit
+        stats = await self.client.get_player_stats(player, **stat_kwargs)
+        return [format_player_stats(stats)]
+
+    async def _game_log(self, args: list[str]) -> list[str]:
+        if not args:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}gamelog')} "
+                "<player name> [hitting|pitching] [N]"
+            ]
+        season, group, limit, remaining = self._parse_game_log_args(args)
+        if not remaining:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}gamelog')} "
+                "<player name> [hitting|pitching] [N]"
+            ]
+        player_or_reply = await self._resolve_player(" ".join(remaining))
+        if isinstance(player_or_reply, str):
+            return [player_or_reply]
+        group = group or _default_stat_group_for_position(player_or_reply.position)
+        entries = await self.client.get_player_game_log(
+            player_or_reply,
             group=group,
             season=season,
-            start_date=start_date,
-            end_date=end_date,
+            limit=limit,
+        )
+        return [format_game_log(player_or_reply.full_name, group, entries)]
+
+    async def _splits(self, args: list[str]) -> list[str]:
+        if not args:
+            return [self._splits_usage()]
+        season, group, situation, remaining = self._parse_split_args(args)
+        if situation is None or not remaining:
+            return [self._splits_usage()]
+        player_or_reply = await self._resolve_player(" ".join(remaining))
+        if isinstance(player_or_reply, str):
+            return [player_or_reply]
+        group = group or _default_stat_group_for_position(player_or_reply.position)
+        stats = await self.client.get_player_split_stats(
+            player_or_reply,
+            group=group,
+            season=season,
+            situation_code=situation[0],
+            situation_label=situation[1],
         )
         return [format_player_stats(stats)]
 
@@ -289,7 +426,7 @@ class CommandRouter:
                 f"{irc.warning('Unknown team')} '{irc.bold(args[0])}'. "
                 "Try an MLB abbreviation like NYY or LAD."
             ]
-        season, group, window_days, remaining = self._parse_teamstats_args(args[1:])
+        season, group, window_days, situation, remaining = self._parse_teamstats_args(args[1:])
         if remaining:
             return [self._teamstats_usage()]
         start_date = end_date = None
@@ -297,17 +434,101 @@ class CommandRouter:
             end_date = self.now().date()
             start_date = end_date - timedelta(days=window_days - 1)
         groups = [group] if group else ["hitting", "pitching"]
-        stats = [
-            await self.client.get_team_stats(
-                _team_info(team),
-                group=stat_group,
-                season=season,
-                start_date=start_date,
-                end_date=end_date,
-            )
-            for stat_group in groups
-        ]
+        stats = []
+        for stat_group in groups:
+            stat_kwargs = {
+                "group": stat_group,
+                "season": season,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+            if situation:
+                stat_kwargs["situation_code"] = situation[0]
+                stat_kwargs["situation_label"] = situation[1]
+            stats.append(await self.client.get_team_stats(_team_info(team), **stat_kwargs))
         return [format_team_stats(stats)]
+
+    async def _team_rank(self, args: list[str]) -> list[str]:
+        if not args:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}teamrank')} "
+                "<stat> [hitting|pitching] [limit]"
+            ]
+        category = args[0]
+        remaining = args[1:]
+        group = None
+        limit = 5
+        for token in remaining:
+            lowered = token.lower()
+            if lowered in {"hitting", "pitching"}:
+                group = lowered
+            elif token.isdigit():
+                limit = max(1, min(int(token), 10))
+            else:
+                raise ValueError("teamrank accepts <stat> [hitting|pitching] [limit].")
+        rankings = await self.client.get_team_rankings(
+            category,
+            season=self.now().year,
+            group=group,
+            limit=limit,
+        )
+        return [format_team_rankings(category, rankings)]
+
+    async def _team_leaders(self, args: list[str]) -> list[str]:
+        if not args:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}teamleaders')} TEAM [category] [limit]"
+            ]
+        team = self.teams.resolve(args[0])
+        if team is None:
+            return [
+                f"{irc.warning('Unknown team')} '{irc.bold(args[0])}'. "
+                "Try an MLB abbreviation like NYY or LAD."
+            ]
+        remaining = args[1:]
+        limit = 3
+        if remaining and remaining[-1].isdigit():
+            limit = max(1, min(int(remaining.pop()), 5))
+        categories = (
+            [normalize_leader_category(remaining[0])]
+            if remaining
+            else DEFAULT_TEAM_LEADER_CATEGORIES
+        )
+        groups = await self.client.get_team_leaders(
+            _team_info(team),
+            categories=categories,
+            season=self.now().year,
+            limit=limit,
+        )
+        return [format_team_leaders(_team_info(team), groups)]
+
+    async def _defense(self, args: list[str]) -> list[str]:
+        if not args:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}defense')} <player name> [season]"
+            ]
+        season, remaining = _pop_optional_season(list(args), self.now().year)
+        player_or_reply = await self._resolve_player(" ".join(remaining))
+        if isinstance(player_or_reply, str):
+            return [player_or_reply]
+        stats = await self.client.get_player_defense(player_or_reply, season=season)
+        return [format_defense(stats)]
+
+    async def _arsenal(self, args: list[str]) -> list[str]:
+        if not args:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}arsenal')} <player name> [season]"
+            ]
+        season, remaining = _pop_optional_season(list(args), self.now().year)
+        player_or_reply = await self._resolve_player(" ".join(remaining))
+        if isinstance(player_or_reply, str):
+            return [player_or_reply]
+        entries = await self.client.get_pitch_arsenal(player_or_reply, season=season)
+        return [format_pitch_arsenal(player_or_reply.full_name, entries)]
 
     async def _transactions(self, args: list[str]) -> list[str]:
         team: TeamRecord | None = None
@@ -342,6 +563,13 @@ class CommandRouter:
                 f"{irc.bold(f'{prefix}box')} TEAM [today|yesterday] or "
                 f"{irc.bold(f'{prefix}box game')} GAMEPK"
             ]
+        if topic in {"wp", "stars", "weather", "replay"}:
+            return [
+                f"{irc.bold(f'{prefix}wp')} TEAM|game GAMEPK, "
+                f"{irc.bold(f'{prefix}stars')} TEAM|game GAMEPK, "
+                f"{irc.bold(f'{prefix}weather')} TEAM|game GAMEPK, "
+                f"{irc.bold(f'{prefix}replay')} TEAM|game GAMEPK"
+            ]
         if topic in {"mlbpitcher", "mlbpitchers", "mlblineup"}:
             return [
                 f"{irc.bold(f'{prefix}mlbpitcher')} TEAM, "
@@ -356,17 +584,34 @@ class CommandRouter:
         if topic == "sstats":
             return [
                 f"{irc.bold(f'{prefix}sstats')} <player name> [hitting|pitching|fielding] "
-                f"[season] [7 days|14 days|30 days]; pitchers default to pitching"
+                f"[season] [7 days|14 days|30 days|last N games]; "
+                "pitchers default to pitching"
+            ]
+        if topic in {"gamelog", "splits"}:
+            return [
+                f"{irc.bold(f'{prefix}gamelog')} <player name> [hitting|pitching] [N]; "
+                f"{irc.bold(f'{prefix}splits')} <player name> "
+                "<risp|vl|vr|home|away|lateclose|basesloaded> [hitting|pitching]"
             ]
         if topic == "leaders":
             return [
                 f"{irc.bold(f'{prefix}leaders')} <category> [limit], e.g. "
-                f"{irc.bold(f'{prefix}leaders homeRuns 5')}"
+                f"{irc.bold(f'{prefix}leaders homeRuns 5')}; supports OPS, WHIP, wRC+, WAR, FIP"
             ]
         if topic == "teamstats":
             return [
                 f"{irc.bold(f'{prefix}teamstats')} TEAM [hitting|pitching] [season] "
-                "[7 days|14 days|30 days]"
+                "[7 days|14 days|30 days] [risp|vl|vr|home|away|lateclose|basesloaded]"
+            ]
+        if topic in {"teamrank", "teamleaders"}:
+            return [
+                f"{irc.bold(f'{prefix}teamrank')} <stat> [hitting|pitching] [limit]; "
+                f"{irc.bold(f'{prefix}teamleaders')} TEAM [category] [limit]"
+            ]
+        if topic in {"defense", "arsenal"}:
+            return [
+                f"{irc.bold(f'{prefix}defense')} <player name> [season]; "
+                f"{irc.bold(f'{prefix}arsenal')} <player name> [season]"
             ]
         if topic == "transactions":
             return [
@@ -377,10 +622,15 @@ class CommandRouter:
             f"{irc.title('Commands')}: "
             f"{irc.bold(f'{prefix}mlb')}, {irc.bold(f'{prefix}mlb *')}, "
             f"{irc.bold(f'{prefix}mlb TEAM')}, {irc.bold(f'{prefix}box')}, "
+            f"{irc.bold(f'{prefix}wp')}, {irc.bold(f'{prefix}stars')}, "
+            f"{irc.bold(f'{prefix}weather')}, {irc.bold(f'{prefix}replay')}, "
             f"{irc.bold(f'{prefix}standings')}, {irc.bold(f'{prefix}wildcard')}, "
             f"{irc.bold(f'{prefix}mlbpitcher')}, {irc.bold(f'{prefix}mlbpitchers')}, "
             f"{irc.bold(f'{prefix}mlblineup')}, {irc.bold(f'{prefix}sstats')}, "
-            f"{irc.bold(f'{prefix}teamstats')}, {irc.bold(f'{prefix}transactions')}, "
+            f"{irc.bold(f'{prefix}gamelog')}, {irc.bold(f'{prefix}splits')}, "
+            f"{irc.bold(f'{prefix}teamstats')}, {irc.bold(f'{prefix}teamrank')}, "
+            f"{irc.bold(f'{prefix}teamleaders')}, {irc.bold(f'{prefix}defense')}, "
+            f"{irc.bold(f'{prefix}arsenal')}, {irc.bold(f'{prefix}transactions')}, "
             f"{irc.bold(f'{prefix}leaders')}, {irc.bold(f'{prefix}help <command>')}"
         ]
 
@@ -388,22 +638,54 @@ class CommandRouter:
         return (
             f"{irc.warning('Usage')}: "
             f"{irc.bold(f'{self.settings.command_prefix}sstats')} <player name> "
-            "[hitting|pitching|fielding] [season] [7 days|14 days|30 days]"
+            "[hitting|pitching|fielding] [season] "
+            "[7 days|14 days|30 days|last N games]"
         )
 
     def _teamstats_usage(self) -> str:
         return (
             f"{irc.warning('Usage')}: "
             f"{irc.bold(f'{self.settings.command_prefix}teamstats')} TEAM "
-            "[hitting|pitching] [season] [7 days|14 days|30 days]"
+            "[hitting|pitching] [season] [7 days|14 days|30 days] "
+            "[risp|vl|vr|home|away|lateclose|basesloaded]"
         )
+
+    def _splits_usage(self) -> str:
+        return (
+            f"{irc.warning('Usage')}: "
+            f"{irc.bold(f'{self.settings.command_prefix}splits')} <player name> "
+            "<risp|vl|vr|home|away|lateclose|basesloaded> "
+            "[hitting|pitching] [season]"
+        )
+
+    async def _resolve_player(self, name: str) -> PlayerSearchResult | str:
+        name = name.strip()
+        if not name:
+            return self._sstats_usage()
+        matches = await self.client.search_people(name)
+        if not matches:
+            return f"{irc.muted('No player found')} for '{irc.bold(name)}'."
+        exact = [player for player in matches if player.full_name.lower() == name.lower()]
+        if len(exact) == 1:
+            return exact[0]
+        if len(matches) == 1:
+            return matches[0]
+        candidates = [
+            (
+                f"{player.full_name} "
+                f"({player.team_name or 'no team'}, {player.position or 'unknown'})"
+            )
+            for player in matches[:5]
+        ]
+        return format_player_candidates(candidates)
 
     def _parse_sstats_args(
         self, args: list[str]
-    ) -> tuple[int, str | None, int | None, list[str]]:
+    ) -> tuple[int, str | None, int | None, int | None, list[str]]:
         season = self.now().year
         group: str | None = None
         window_days: int | None = None
+        games_limit: int | None = None
         remaining = list(args)
 
         changed = True
@@ -418,23 +700,83 @@ class CommandRouter:
                 season = int(remaining.pop())
                 changed = True
                 continue
+            parsed_games = _pop_game_window(remaining)
+            if parsed_games is not None:
+                games_limit = parsed_games
+                changed = True
+                continue
             parsed_window = _pop_stat_window(remaining)
             if parsed_window is not None:
                 window_days = parsed_window
                 changed = True
 
+        if games_limit is not None and window_days is not None:
+            raise ValueError("stats accepts either a day window or a game window, not both.")
+        if games_limit is not None and not 1 <= games_limit <= MAX_LAST_GAMES:
+            raise ValueError(f"last-games window must be 1-{MAX_LAST_GAMES} games.")
         if window_days is not None and not 1 <= window_days <= MAX_STAT_WINDOW_DAYS:
             raise ValueError(
                 f"stats time window must be 1-{MAX_STAT_WINDOW_DAYS} days."
             )
-        return season, group, window_days, remaining
+        return season, group, window_days, games_limit, remaining
+
+    def _parse_game_log_args(
+        self, args: list[str]
+    ) -> tuple[int, str | None, int, list[str]]:
+        season = self.now().year
+        group: str | None = None
+        limit = 5
+        remaining = list(args)
+        changed = True
+        while changed and remaining:
+            changed = False
+            last = remaining[-1].lower()
+            if last in {"hitting", "pitching"}:
+                group = remaining.pop().lower()
+                changed = True
+                continue
+            if remaining[-1].isdigit() and len(remaining[-1]) == 4:
+                season = int(remaining.pop())
+                changed = True
+                continue
+            if remaining[-1].isdigit():
+                limit = max(1, min(int(remaining.pop()), 10))
+                changed = True
+        return season, group, limit, remaining
+
+    def _parse_split_args(
+        self, args: list[str]
+    ) -> tuple[int, str | None, tuple[str, str] | None, list[str]]:
+        season = self.now().year
+        group: str | None = None
+        situation: tuple[str, str] | None = None
+        remaining = list(args)
+        changed = True
+        while changed and remaining:
+            changed = False
+            last = remaining[-1].lower()
+            if last in {"hitting", "pitching"}:
+                group = remaining.pop().lower()
+                changed = True
+                continue
+            if remaining[-1].isdigit() and len(remaining[-1]) == 4:
+                season = int(remaining.pop())
+                changed = True
+                continue
+            parsed_situation = situation_code(remaining[-1])
+            if parsed_situation is not None:
+                situation = parsed_situation
+                remaining.pop()
+                changed = True
+        return season, group, situation, remaining
 
     def _parse_teamstats_args(
         self, args: list[str]
-    ) -> tuple[int, str | None, int | None, list[str]]:
+    ) -> tuple[int, str | None, int | None, tuple[str, str] | None, list[str]]:
         season = self.now().year
         group: str | None = None
         window_days: int | None = None
+        situation: tuple[str, str] | None = None
         remaining = list(args)
 
         changed = True
@@ -449,16 +791,26 @@ class CommandRouter:
                 season = int(remaining.pop())
                 changed = True
                 continue
+            parsed_situation = situation_code(remaining[-1])
+            if parsed_situation is not None:
+                situation = parsed_situation
+                remaining.pop()
+                changed = True
+                continue
             parsed_window = _pop_stat_window(remaining)
             if parsed_window is not None:
                 window_days = parsed_window
                 changed = True
 
+        if situation is not None and window_days is not None:
+            raise ValueError(
+                "team stats accepts either a situation split or a day window, not both."
+            )
         if window_days is not None and not 1 <= window_days <= MAX_STAT_WINDOW_DAYS:
             raise ValueError(
                 f"team stats time window must be 1-{MAX_STAT_WINDOW_DAYS} days."
             )
-        return season, group, window_days, remaining
+        return season, group, window_days, situation, remaining
 
     def _parse_transaction_dates(self, args: list[str]) -> tuple[date, date]:
         remaining = list(args)
@@ -548,10 +900,80 @@ class CommandRouter:
             )
         return games[0], team.abbreviation
 
+    async def _detail_game_from_args(
+        self,
+        args: list[str],
+        command_name: str,
+        *,
+        allow_upcoming: bool,
+    ) -> tuple[GameSummary | None, str]:
+        if not args:
+            return (
+                None,
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}{command_name}')} "
+                "TEAM [today|yesterday] or "
+                f"{irc.bold(f'{self.settings.command_prefix}{command_name} game')} GAMEPK",
+            )
+        if args[0].lower() == "game" and len(args) >= 2 and args[1].isdigit():
+            detail = await self.client.get_game_detail(int(args[1]))
+            if detail.summary.is_upcoming and not allow_upcoming:
+                return (
+                    None,
+                    f"{irc.team(detail.summary.away.abbreviation)} vs "
+                    f"{irc.team(detail.summary.home.abbreviation, home=True)}: "
+                    f"{irc.muted('not available before first pitch')}.",
+                )
+            return detail.summary, ""
+        game, message = await self._game_for_team_on_date(args, command_name)
+        if game is None:
+            return None, message
+        if game.is_upcoming and not allow_upcoming:
+            return (
+                None,
+                f"{irc.team(message)}: {command_name} is "
+                f"{irc.muted('not available before first pitch')} for "
+                f"{irc.team(game.away.abbreviation)} vs "
+                f"{irc.team(game.home.abbreviation, home=True)}.",
+            )
+        return game, message
+
+    async def _detail_from_args(
+        self,
+        args: list[str],
+        command_name: str,
+        *,
+        allow_upcoming: bool,
+    ) -> tuple[GameDetail | None, str]:
+        if args and args[0].lower() == "game" and len(args) >= 2 and args[1].isdigit():
+            detail = await self.client.get_game_detail(int(args[1]))
+            if detail.summary.is_upcoming and not allow_upcoming:
+                return (
+                    None,
+                    f"{irc.team(detail.summary.away.abbreviation)} vs "
+                    f"{irc.team(detail.summary.home.abbreviation, home=True)}: "
+                    f"{irc.muted('not available before first pitch')}.",
+                )
+            return detail, ""
+        game, message = await self._detail_game_from_args(
+            args,
+            command_name,
+            allow_upcoming=allow_upcoming,
+        )
+        if game is None:
+            return None, message
+        return await self.client.get_game_detail(game.game_pk), ""
+
     async def _try_win_probability(self, game_pk: int):
         try:
             return await self.client.get_win_probability(game_pk)
         except MLBAPIError:
+            return None
+
+    async def _try_win_probability_summary(self, game_pk: int, game: GameSummary):
+        try:
+            return await self.client.get_win_probability_summary(game_pk, game)
+        except (AttributeError, MLBAPIError):
             return None
 
 
@@ -583,8 +1005,33 @@ def _pop_stat_window(args: list[str]) -> int | None:
     if len(args) >= 2 and last in STAT_WINDOW_WORDS and args[-2].isdigit():
         days = int(args[-2])
         del args[-2:]
+        if args and args[-1].lower() == "last":
+            args.pop()
         return days
     return None
+
+
+def _pop_game_window(args: list[str]) -> int | None:
+    if not args:
+        return None
+    last = args[-1].lower()
+    match = fullmatch(r"(\d+)(?:g|games?)", last)
+    if match:
+        args.pop()
+        return int(match.group(1))
+    if len(args) >= 2 and last in GAME_WINDOW_WORDS and args[-2].isdigit():
+        games = int(args[-2])
+        del args[-2:]
+        if args and args[-1].lower() == "last":
+            args.pop()
+        return games
+    return None
+
+
+def _pop_optional_season(args: list[str], default: int) -> tuple[int, list[str]]:
+    if args and args[-1].isdigit() and len(args[-1]) == 4:
+        return int(args.pop()), args
+    return default, args
 
 
 def _default_stat_group_for_position(position: str | None) -> str:

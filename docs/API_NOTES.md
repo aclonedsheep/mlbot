@@ -13,7 +13,12 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Game live feed: `/api/v1.1/game/{gamePk}/feed/live`, with `/api/v1/...` fallback
 - Game fallback data: `/api/v1/game/{gamePk}/linescore`, `/boxscore`, `/playByPlay`
 - Game context metrics: `/api/v1/game/{gamePk}/contextMetrics` for live win probability.
+- Game win-probability history: `/api/v1/game/{gamePk}/winProbability` for current game win probability, largest swings, and high-leverage play context.
+- Boxscore top performers: `/api/v1/game/{gamePk}/boxscore` and live-feed `liveData.boxscore.topPerformers`.
+- Weather/replay/game info: live-feed `gameData.weather`, `gameData.review`, and `gameData.gameInfo`.
 - Team stats: `/api/v1/teams/{teamId}/stats` with `season`, `group`, `stats`, and optional date range.
+- Team rankings: `/api/v1/teams/stats` with `sortStat` and `order`.
+- Team leaders: `/api/v1/teams/{teamId}/leaders`.
 - Transactions: `/api/v1/transactions` with `sportId`, `teamId`, `startDate`, and `endDate`.
 - Home run park counts: Baseball Savant `/leaderboard/home-runs?type=details&player_id={id}&year={year}&player_type=Batters&cat=xhr`.
   The bot matches Savant rows to MLB live-feed home run plays by batted-ball `playId`
@@ -29,6 +34,18 @@ values:
 - `sabermetrics`: public MLB Stats API sabermetric fields including WAR, wRC+, FIP, xFIP, and related run-value fields when available.
 - `expectedStatistics`: expected-stat fields such as expected AVG, SLG, and wOBA-style values when available.
 - `byDateRange` and `byDateRangeAdvanced`: date-window basic and advanced stats using `startDate` and `endDate`.
+- `lastXGames`: compact recent player stats using `limit`.
+- `gameLog`: game-by-game player stat lines.
+- `statSplits`: situational splits using `sitCodes` such as `risp`, `vl`, `vr`, `h`, `a`, `lc`, and `r123`.
+- `outsAboveAverage`: player defense fields such as total OAA and fielding runs prevented when available.
+- `pitchArsenal`: pitch mix usage, count, and average speed.
+
+The `/api/v1/{type}` metadata endpoint exposes useful catalogs. Live probes on
+2026-06-06 confirmed `statTypes`, `statGroups`, `leagueLeaderTypes`, `metrics`,
+`situationCodes`, and `rosterTypes`. The new split commands use the public
+`situationCodes` catalog; advanced leaders use `/api/v1/stats` rather than
+`/api/v1/stats/leaders` when categories such as wRC+, WAR, FIP, xFIP, or xwOBA
+are not available through the league-leader endpoint.
 
 The bot treats advanced, sabermetric, and expected-stat responses as optional because
 support can vary by group, player, date range, and future API changes. A separate paid API

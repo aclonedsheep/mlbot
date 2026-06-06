@@ -103,3 +103,11 @@
 - Decisions: add `scripts/deploy.ps1` with defaults for `208.109.241.169`, `/home/wolfb/mlbot`, `main`, and the `mlb-irc-bot` Compose service; keep the script conservative by requiring clean local and remote checkouts.
 - Deploy flow: push with the `aclonedsheep` GitHub CLI credential by default, SSH to the VPS, fast-forward the checkout, rebuild/restart Docker Compose, run app dry-run inside the container, and print container state.
 - Docs: documented the one-command deployment and common options in `docs/DEVELOPMENT.md`.
+
+## 2026-06-06 - Iteration 14: Expanded Stats, Game Context, And Alerts
+
+- Goal: implement the approved API review list for new IRC commands and live alerts.
+- API findings: `/game/{gamePk}/winProbability` exposes per-play win probability, swing, and leverage data; live feed and boxscore expose weather, replay challenge state, game info, and top performers; `/people/{id}/stats` supports `lastXGames`, `gameLog`, `statSplits`, `outsAboveAverage`, and `pitchArsenal`; `/teams/stats` and `/teams/{id}/leaders` support team rankings/leaders.
+- Commands: added `@wp`, `@stars`, `@weather`, `@replay`, `@gamelog`, `@splits`, `@teamrank`, `@teamleaders`, `@defense`, and `@arsenal`; extended `@sstats` with `last N games`, `@teamstats` with situation splits, and `@leaders` with expanded/basic plus advanced leaderboard aliases.
+- Alerts: added configurable win-probability swing, high-leverage, hard-hit, barrel/sweet-spot, late-threat, and game-info/weather alerts; final alerts now append a top performer when the live feed has one.
+- Verification: Python 3.12.13 `pytest` passes with 41 tests using a repo-local temp dir; `ruff check .` passes; live API smoke for `@wp game`, `@stars game`, `@weather game`, and `@replay game` returned formatted replies for game 823697.

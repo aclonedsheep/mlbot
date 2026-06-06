@@ -11,13 +11,23 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 - `@mlb TEAM tomorrow` shows tomorrow's game for a team.
 - `@mlb game GAMEPK` shows one game by MLB game id.
 - `@box TEAM` or `@box game GAMEPK` shows a compact R-H-E boxscore.
+- `@wp TEAM` shows current win probability and the biggest game swing.
+- `@stars TEAM` shows top boxscore performers.
+- `@weather TEAM` shows game weather.
+- `@replay TEAM` shows replay challenge usage/remaining when available.
 - `@mlbpitcher TEAM` shows the current pitcher and game pitching line.
 - `@mlbpitchers TEAM` shows all pitchers used and their game pitching lines.
 - `@mlblineup TEAM` shows the posted lineup for that team.
 - `@standings [AL|NL|division|TEAM]` shows regular-season standings.
 - `@wildcard [AL|NL|all]` shows wildcard standings.
-- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days]` shows season or recent stats, defaulting pitchers to pitching stats.
-- `@teamstats TEAM [hitting|pitching] [season] [7 days|14 days|30 days]` shows team hitting and/or pitching stats.
+- `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days|last N games]` shows season or recent stats, defaulting pitchers to pitching stats.
+- `@gamelog <player name> [hitting|pitching] [N]` shows recent game log lines.
+- `@splits <player name> <risp|vl|vr|home|away|lateclose|basesloaded> [hitting|pitching]` shows situational splits.
+- `@teamstats TEAM [hitting|pitching] [season] [7 days|14 days|30 days] [split]` shows team hitting and/or pitching stats.
+- `@teamrank <stat> [hitting|pitching] [limit]` shows team rankings.
+- `@teamleaders TEAM [category] [limit]` shows team leaders.
+- `@defense <player name> [season]` shows Outs Above Average-style defense stats.
+- `@arsenal <player name> [season]` shows pitch mix.
 - `@transactions [TEAM] [today|yesterday|7 days|YYYY-MM-DD]` shows recent player transactions.
 - `@leaders <category> [limit]` shows stat leaders.
 - `@help [command]` lists command help.

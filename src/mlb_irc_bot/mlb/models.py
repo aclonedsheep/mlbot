@@ -86,6 +86,21 @@ class WinProbability:
 
 
 @dataclass(frozen=True)
+class WinProbabilitySwing:
+    team: TeamInfo
+    probability_added: float
+    description: str
+    inning: int | None = None
+    half_inning: str | None = None
+
+
+@dataclass(frozen=True)
+class WinProbabilitySummary:
+    current: WinProbability | None = None
+    biggest_swing: WinProbabilitySwing | None = None
+
+
+@dataclass(frozen=True)
 class LineupEntry:
     order: int
     player_id: int | None
@@ -138,6 +153,8 @@ class PlayerStats:
     expected_stats: JsonDict = field(default_factory=dict)
     start_date: date | None = None
     end_date: date | None = None
+    games_limit: int | None = None
+    split_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -148,6 +165,7 @@ class TeamStats:
     stats: JsonDict
     start_date: date | None = None
     end_date: date | None = None
+    split_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -167,3 +185,43 @@ class Leader:
     value: str
     player_name: str
     team_name: str | None = None
+
+
+@dataclass(frozen=True)
+class GameLogEntry:
+    date: date | None
+    opponent: TeamInfo | None
+    is_home: bool | None
+    stats: JsonDict
+
+
+@dataclass(frozen=True)
+class TeamLeaderGroup:
+    category: str
+    leaders: tuple[Leader, ...]
+
+
+@dataclass(frozen=True)
+class TeamRanking:
+    rank: str
+    team: TeamInfo
+    value: str
+    stats: JsonDict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TopPerformer:
+    player_name: str
+    performer_type: str
+    game_score: int | None = None
+    team: TeamInfo | None = None
+    batting_stats: JsonDict = field(default_factory=dict)
+    pitching_stats: JsonDict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PitchArsenalEntry:
+    pitch_type: str
+    count: int | None = None
+    percentage: float | None = None
+    average_speed: float | None = None

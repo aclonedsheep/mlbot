@@ -169,6 +169,88 @@ def test_home_run_scoring_play_is_only_a_home_run_alert() -> None:
     assert strip_irc_formatting(alerts[0].message) == "HR: Mookie Betts homers."
 
 
+def test_collect_alerts_detects_new_contextual_alerts() -> None:
+    feed = {
+        "gamePk": 777,
+        "gameData": {
+            "teams": {
+                "away": {"id": 141, "abbreviation": "TOR"},
+                "home": {"id": 110, "abbreviation": "BAL"},
+            },
+            "weather": {"condition": "Sunny", "temp": "82", "wind": "3 mph, L To R"},
+            "gameInfo": {"firstPitch": "2026-06-06T18:12:00.000Z"},
+        },
+        "winProbabilityPlays": [
+            {
+                "homeTeamWinProbabilityAdded": 18.4,
+                "leverageIndex": 3.2,
+                "about": {"atBatIndex": 30, "inning": 8, "halfInning": "bottom"},
+                "matchup": {"batter": {"fullName": "Clutch Hitter"}},
+                "result": {"description": "Clutch Hitter doubles."},
+            }
+        ],
+        "liveData": {
+            "linescore": {
+                "currentInning": 8,
+                "inningHalf": "Top",
+                "outs": 2,
+                "teams": {
+                    "away": {"runs": 3},
+                    "home": {"runs": 4},
+                },
+                "offense": {
+                    "team": {"id": 141, "name": "Toronto Blue Jays"},
+                    "batter": {"fullName": "Tying Batter"},
+                },
+            },
+            "plays": {
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 31},
+                        "result": {
+                            "event": "Double",
+                            "eventType": "double",
+                            "description": "Bo Bichette doubles.",
+                        },
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 111.2,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 390.0,
+                                },
+                            }
+                        ],
+                    }
+                ]
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed)
+    by_type = {alert.alert_type: strip_irc_formatting(alert.message) for alert in alerts}
+
+    assert by_type["win_probability"].startswith(
+        "WP swing: BAL +18.4% Bottom 8: Clutch Hitter doubles."
+    )
+    assert by_type["high_leverage"].startswith(
+        "High leverage: LI 3.2 Bottom 8, Clutch Hitter - Clutch Hitter doubles."
+    )
+    assert by_type["hard_hit"].startswith(
+        "Hard hit: Bo Bichette doubles. | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+    assert by_type["barrel"].startswith(
+        "Barrel: Bo Bichette doubles. | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+    assert by_type["late_threat"].startswith(
+        "Late threat: Toronto Blue Jays has the tying run at the plate"
+    )
+    assert by_type["weather"].startswith(
+        "Game info: TOR @ BAL - first pitch 2026-06-06 18:12:00.000 UTC"
+    )
+
+
 def _strikeout_half_inning() -> list[dict]:
     plays = []
     for index in range(3):
