@@ -49,7 +49,11 @@ def test_collect_alerts_detects_live_events() -> None:
                         + [
                             {
                                 "details": {"isPitch": True},
-                                "hitData": {"launchSpeed": 105.5, "launchAngle": 28.0},
+                                "hitData": {
+                                    "launchSpeed": 105.5,
+                                    "launchAngle": 28.0,
+                                    "totalDistance": 412.0,
+                                },
                             }
                         ],
                         "homeRunData": {"parks": 24},
@@ -119,7 +123,8 @@ def test_collect_alerts_detects_live_events() -> None:
     } <= alert_types
     assert (
         strip_irc_formatting(alerts_by_type["home_run"].message)
-        == "HR: Mookie Betts homers. | EV 105.5 mph, LA 28 deg, Other parks 23/29"
+        == "HR: Mookie Betts homers. | EV 105.5 mph, LA 28 deg, Dist 412 ft, "
+        "Other parks 23/29"
     )
     assert (
         strip_irc_formatting(alerts_by_type["scoring"].message)

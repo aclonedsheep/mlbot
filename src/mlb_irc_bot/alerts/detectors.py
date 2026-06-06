@@ -261,6 +261,12 @@ def _home_run_details(play: JsonDict) -> str:
         advanced.get("launchAngle"),
         advanced.get("launch_angle"),
     )
+    distance = _first_float(
+        hit_data.get("totalDistance"),
+        advanced.get("distance"),
+        advanced.get("hrDistance"),
+        advanced.get("hr_distance"),
+    )
     other_parks = _first_int(advanced.get("otherParks"), advanced.get("other_parks"))
     if other_parks is None:
         parks = _first_int(
@@ -277,6 +283,8 @@ def _home_run_details(play: JsonDict) -> str:
         parts.append(f"EV {irc.value(_format_number(exit_velocity))} mph")
     if launch_angle is not None:
         parts.append(f"LA {irc.value(_format_number(launch_angle))} deg")
+    if distance is not None:
+        parts.append(f"Dist {irc.value(_format_number(distance))} ft")
     if other_parks is not None:
         parts.append(f"Other parks {irc.value(f'{other_parks}/29')}")
     return ", ".join(parts)
