@@ -111,3 +111,11 @@
 - Commands: added `@wp`, `@stars`, `@weather`, `@replay`, `@gamelog`, `@splits`, `@teamrank`, `@teamleaders`, `@defense`, and `@arsenal`; extended `@sstats` with `last N games`, `@teamstats` with situation splits, and `@leaders` with expanded/basic plus advanced leaderboard aliases.
 - Alerts: added configurable win-probability swing, high-leverage, hard-hit, barrel/sweet-spot, late-threat, and game-info/weather alerts; final alerts now append a top performer when the live feed has one.
 - Verification: Python 3.12.13 `pytest` passes with 41 tests using a repo-local temp dir; `ruff check .` passes; live API smoke for `@wp game`, `@stars game`, `@weather game`, and `@replay game` returned formatted replies for game 823697.
+
+## 2026-06-06 - Iteration 15: Restore Pregame Announcements
+
+- Goal: confirm and fix missing IRC announcements after the expanded alert update.
+- Live check: inspected the VPS container to confirm it was running in `#mlbtest` on Libera, then joined as `AIBugWaiter9000` for four minutes; human channel traffic appeared, but no bot announcements did.
+- Finding: game-info/weather detectors worked, but `LiveScheduler` skipped every scheduled non-live game, so near-start announcements were never collected. The scheduler also started on IRC welcome before the bot had confirmed its own channel join.
+- Decisions: start alert scheduling only after the bot sees its own configured-channel `JOIN`; poll upcoming games only in the near-start window and throttle those detail checks by `MLB_NEAR_START_POLL_SECONDS`.
+- Verification: `python -m pytest -q -o cache_dir=.tmp\pytest-cache --basetemp=.tmp\pytest-basetemp` passes with 44 tests; `python -m ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes.

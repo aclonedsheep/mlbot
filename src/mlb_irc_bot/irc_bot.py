@@ -85,7 +85,7 @@ class MLBServer(BaseServer):
         self.service = service
 
     async def line_read(self, line: Line) -> None:
-        if line.command == "001":
+        if line.command == "JOIN" and self._is_own_channel_join(line):
             self.service.start_scheduler(self)
             return
         if line.command != "PRIVMSG" or len(line.params) < 2:
@@ -115,6 +115,17 @@ class MLBServer(BaseServer):
 
     async def send_channel_message(self, message: str) -> None:
         await self.send_message(self.service.settings.irc_channel, message)
+
+    def _is_own_channel_join(self, line: Line) -> bool:
+        if not line.params:
+            return False
+        if not _is_own_message(
+            line.hostmask.nickname,
+            current_nick=self.nickname,
+            configured_nick=self.service.settings.irc_nick,
+        ):
+            return False
+        return self.casefold_equals(line.params[0], self.service.settings.irc_channel)
 
 
 def _is_own_message(

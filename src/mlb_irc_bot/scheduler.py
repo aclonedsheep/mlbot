@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import monotonic
 
 from mlb_irc_bot.alerts.detectors import collect_alerts, final_alert_from_summary
@@ -11,6 +11,8 @@ from mlb_irc_bot.mlb.models import GameSummary
 from mlb_irc_bot.storage import AlertStore
 
 SendAlert = Callable[[str], Awaitable[None]]
+NEAR_START_LOOKAHEAD = timedelta(hours=2)
+NEAR_START_GRACE = timedelta(hours=3)
 
 
 class LiveScheduler:
@@ -28,6 +30,7 @@ class LiveScheduler:
         self.send_alert = send_alert
         self._cached_games: list[GameSummary] = []
         self._last_schedule_refresh = 0.0
+        self._last_near_start_poll: dict[int, float] = {}
 
     async def run_forever(self) -> None:
         while True:
@@ -36,14 +39,15 @@ class LiveScheduler:
 
     async def poll_once(self) -> None:
         now = datetime.now(self.settings.zoneinfo())
-        if monotonic() - self._last_schedule_refresh >= self.settings.schedule_poll_seconds:
+        now_monotonic = monotonic()
+        if now_monotonic - self._last_schedule_refresh >= self.settings.schedule_poll_seconds:
             self._cached_games = await self.client.get_schedule(now.date())
             self._last_schedule_refresh = monotonic()
         elif not self._cached_games:
             self._cached_games = await self.client.get_schedule(now.date())
 
         for game in self._cached_games:
-            if not (game.is_live or game.is_final):
+            if not self._should_poll_game(game, now=now, now_monotonic=now_monotonic):
                 continue
             alerts: list[Alert] = []
             try:
@@ -70,6 +74,23 @@ class LiveScheduler:
                 alerts.append(final_alert)
             for alert in alerts:
                 await self._send_once(alert)
+
+    def _should_poll_game(
+        self,
+        game: GameSummary,
+        *,
+        now: datetime,
+        now_monotonic: float,
+    ) -> bool:
+        if game.is_live or game.is_final:
+            return True
+        if not _is_near_start_game(game, now):
+            return False
+        last_polled = self._last_near_start_poll.get(game.game_pk, 0.0)
+        if now_monotonic - last_polled < self.settings.near_start_poll_seconds:
+            return False
+        self._last_near_start_poll[game.game_pk] = now_monotonic
+        return True
 
     async def _send_once(self, alert: Alert) -> None:
         if not self._enabled(alert.alert_type):
@@ -101,3 +122,15 @@ class LiveScheduler:
             "late_threat": self.settings.enable_alert_late_threat,
             "weather": self.settings.enable_alert_weather,
         }.get(alert_type, True)
+
+
+def _is_near_start_game(game: GameSummary, now: datetime) -> bool:
+    if not game.is_upcoming or game.game_date is None:
+        return False
+    game_time = game.game_date
+    if game_time.tzinfo is None:
+        game_time = game_time.replace(tzinfo=now.tzinfo)
+    else:
+        game_time = game_time.astimezone(now.tzinfo)
+    until_start = game_time - now
+    return -NEAR_START_GRACE <= until_start <= NEAR_START_LOOKAHEAD
