@@ -15,7 +15,9 @@
   parsing prefers direct MP4 playbacks, especially MLB's `mp4Avc` URL, before
   falling back to public MLB video pages; slug-only MLB video links are resolved
   through public page `og:video` metadata when needed; `@highlights` prints the
-  resolved MP4 URL because the formatter uses `GameHighlight.url`.
+  resolved MP4 URL because the formatter uses `GameHighlight.url`; highlights
+  now emit one IRC line per returned clip so long MP4 URLs do not hide links
+  behind an omitted-count suffix.
 - Verification: focused parser/command tests pass; `.\.venv\Scripts\python -m
   pytest -q -o cache_dir=.tmp\task070-pytest-cache
   --basetemp=.tmp\task070-pytest-basetemp` passes with 55 tests and known

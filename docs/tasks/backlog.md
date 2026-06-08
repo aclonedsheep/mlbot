@@ -150,7 +150,9 @@ checkout did not contain the backlog file.
 - Result: highlight parsing now prefers direct MP4 playback URLs from
   `/api/v1/game/{gamePk}/content`, keeps the MLB video page URL separately, and
   falls back through public video-page `og:video` metadata for slug-only items.
-  `@highlights` now prints the resolved MP4 URLs in IRC when available.
+  `@highlights` now prints resolved MP4 URLs in IRC when available, using one
+  line per returned highlight so long media URLs do not hide links behind an
+  omitted-count suffix.
 - Verification: focused highlight parser/command tests pass; `pytest` passes
   with 55 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
   passes; `git diff --check` passes. A live client probe for game `822807`

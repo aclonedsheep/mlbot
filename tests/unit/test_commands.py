@@ -618,8 +618,9 @@ async def test_highlights_accepts_game_id() -> None:
     replies = await router.handle_message("@highlights game 824832")
 
     assert _plain(replies) == [
-        "Highlights TOR @ BAL: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
-        "https://clips.example/vlad-go-ahead-homer.mp4; Blue Jays turn two 00:00:28 "
+        "Highlights TOR @ BAL 1/2: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
+        "https://clips.example/vlad-go-ahead-homer.mp4",
+        "Highlights TOR @ BAL 2/2: Blue Jays turn two 00:00:28 "
         "https://clips.example/jays-turn-two.mp4"
     ]
 

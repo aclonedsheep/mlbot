@@ -588,7 +588,7 @@ class CommandRouter:
         if game is None:
             return [message]
         highlights = await self.client.get_game_highlights(game.game_pk, limit=3)
-        return [format_highlights(game, highlights)]
+        return format_highlights(game, highlights)
 
     def _help(self, args: list[str]) -> list[str]:
         prefix = self.settings.command_prefix
