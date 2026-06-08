@@ -25,7 +25,7 @@
   emphasis, and resets were balanced.
 - Gap: no live games were active during the preview, so no naturally firing
   alert could be judged in-channel.
-- Commit: pending.
+- Commit: `1652e2e014757337ef3d59d8d278a74141e1d99f`.
 - Resume prompt: Continue after TASK-066; deployed command formatting was
   previewed successfully in `#mlbtest`. The next useful live check is to watch a
   naturally firing alert when games are active and tweak alert presentation only
