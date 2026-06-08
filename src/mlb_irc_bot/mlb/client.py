@@ -1,6 +1,9 @@
 import asyncio
+from dataclasses import replace
 from datetime import date, datetime
+from html.parser import HTMLParser
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -810,7 +813,16 @@ class MLBStatsClient:
 
     async def get_game_highlights(self, game_pk: int, *, limit: int = 3) -> list[GameHighlight]:
         payload = await self._get(f"/v1/game/{game_pk}/content")
-        return _parse_game_highlights(payload)[:limit]
+        highlights = _parse_game_highlights(payload)[:limit]
+        return await self._resolve_highlight_mp4_urls(highlights)
+
+    async def resolve_video_mp4_url(self, video_url: str) -> str | None:
+        """Resolve an MLB public video page to its direct MP4 URL when exposed."""
+        try:
+            html = await self._get_text(video_url, label=video_url)
+        except MLBAPIError:
+            return None
+        return _extract_video_mp4_url(html)
 
     async def available_schedule_hydrations(self, target_date: date) -> list[str]:
         payload = await self._get(
@@ -926,6 +938,18 @@ class MLBStatsClient:
         url = f"{self.savant_base_url}{path}"
         return await self._get_json(url, params=params, label=path)
 
+    async def _resolve_highlight_mp4_urls(
+        self, highlights: list[GameHighlight]
+    ) -> list[GameHighlight]:
+        resolved: list[GameHighlight] = []
+        for highlight in highlights:
+            if _is_mp4_url(highlight.url) or not _is_mlb_video_url(highlight.url):
+                resolved.append(highlight)
+                continue
+            mp4_url = await self.resolve_video_mp4_url(highlight.url)
+            resolved.append(replace(highlight, url=mp4_url) if mp4_url else highlight)
+        return resolved
+
     async def _get_json(
         self,
         url: str,
@@ -940,6 +964,19 @@ class MLBStatsClient:
                 response.raise_for_status()
                 return response.json()
             except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(0.25)
+        raise MLBAPIError(f"MLB API request failed for {label}: {last_error}") from last_error
+
+    async def _get_text(self, url: str, *, label: str) -> str:
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                response = await self._client.get(url)
+                response.raise_for_status()
+                return response.text
+            except httpx.HTTPError as exc:
                 last_error = exc
                 if attempt == 0:
                     await asyncio.sleep(0.25)
@@ -1155,35 +1192,108 @@ def _parse_game_highlights(payload: JsonDict) -> list[GameHighlight]:
         items.extend(bucket.get("items") or [])
 
     parsed: list[GameHighlight] = []
-    seen_urls: set[str] = set()
+    seen_highlights: set[str] = set()
     for item in items:
         title = str(item.get("headline") or item.get("title") or item.get("blurb") or "").strip()
         if not title:
             continue
         url = _highlight_url(item)
-        if not url or url in seen_urls:
+        identity = _highlight_identity(item, url)
+        if not url or identity in seen_highlights:
             continue
-        seen_urls.add(url)
+        seen_highlights.add(identity)
         parsed.append(
             GameHighlight(
                 title=title,
                 url=url,
                 blurb=item.get("blurb"),
                 duration=item.get("duration"),
+                page_url=_highlight_page_url(item),
             )
         )
     return parsed
 
 
 def _highlight_url(item: JsonDict) -> str:
+    return _highlight_mp4_url(item) or _highlight_page_url(item) or _first_playback_url(item)
+
+
+def _highlight_mp4_url(item: JsonDict) -> str:
+    candidates: list[tuple[tuple[int, int], str]] = []
+    for index, playback in enumerate(item.get("playbacks") or ()):
+        url = str(playback.get("url") or "")
+        if not _is_mp4_url(url):
+            continue
+        name = str(playback.get("name") or "").lower()
+        mimetype = str(playback.get("mimetype") or playback.get("mimeType") or "").lower()
+        if name == "mp4avc":
+            rank = 0
+        elif "mp4" in name or mimetype == "video/mp4":
+            rank = 1
+        elif "highbit" in name:
+            rank = 3
+        else:
+            rank = 2
+        candidates.append(((rank, index), url))
+    if not candidates:
+        return ""
+    return min(candidates, key=lambda item: item[0])[1]
+
+
+def _highlight_page_url(item: JsonDict) -> str:
     slug = str(item.get("slug") or item.get("id") or "").strip("/")
     if slug:
         return f"https://www.mlb.com/video/{slug}"
+    return ""
+
+
+def _first_playback_url(item: JsonDict) -> str:
     for playback in item.get("playbacks") or ():
         url = str(playback.get("url") or "")
         if url.startswith("http"):
             return url
     return ""
+
+
+def _highlight_identity(item: JsonDict, url: str) -> str:
+    return str(item.get("slug") or item.get("id") or url).strip().lower()
+
+
+def _is_mp4_url(url: str) -> bool:
+    path = urlparse(url).path.lower()
+    return path.endswith(".mp4")
+
+
+def _is_mlb_video_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.netloc.lower().endswith("mlb.com") and parsed.path.startswith("/video/")
+
+
+def _extract_video_mp4_url(html: str) -> str | None:
+    parser = _VideoPageParser()
+    parser.feed(html)
+    return parser.mp4_url
+
+
+class _VideoPageParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.mp4_url: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.mp4_url is not None or tag.lower() != "meta":
+            return
+        values = {name.lower(): value or "" for name, value in attrs}
+        key = (values.get("property") or values.get("name") or "").lower()
+        if key not in {
+            "og:video:secure_url",
+            "og:video",
+            "twitter:player:stream",
+        }:
+            return
+        content = values.get("content") or ""
+        if _is_mp4_url(content):
+            self.mp4_url = content
 
 
 def _raw_game_pk(raw: JsonDict) -> int | None:

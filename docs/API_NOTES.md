@@ -14,7 +14,7 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Game fallback data: `/api/v1/game/{gamePk}/linescore`, `/boxscore`, `/playByPlay`
 - Game context metrics: `/api/v1/game/{gamePk}/contextMetrics` for live win probability.
 - Game win-probability history: `/api/v1/game/{gamePk}/winProbability` for current game win probability, largest swings, and high-leverage play context.
-- Game content: `/api/v1/game/{gamePk}/content` for MLB video highlight metadata and slugs.
+- Game content: `/api/v1/game/{gamePk}/content` for MLB video highlight metadata, slugs, and MP4 playback URLs.
 - Boxscore top performers: `/api/v1/game/{gamePk}/boxscore` and live-feed `liveData.boxscore.topPerformers`.
 - Weather/replay/game info: live-feed `gameData.weather`, `gameData.review`, and `gameData.gameInfo`.
 - Team stats: `/api/v1/teams/{teamId}/stats` with `season`, `group`, `stats`, and optional date range.

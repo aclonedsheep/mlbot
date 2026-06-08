@@ -15,7 +15,7 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 - `@wp TEAM` shows current win probability and the biggest game swing.
 - `@stars TEAM` shows top boxscore performers.
 - `@weather TEAM` shows game weather.
-- `@highlights TEAM` or `@highlights game GAMEPK` shows compact MLB video highlight links.
+- `@highlights TEAM` or `@highlights game GAMEPK` shows compact MLB highlight MP4 links when available.
 - `@replay TEAM` shows replay challenge usage/remaining when available.
 - `@mlbpitcher TEAM` shows the current pitcher and game pitching line.
 - `@mlbpitchers TEAM` shows all pitchers used and their game pitching lines.

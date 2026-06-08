@@ -119,8 +119,6 @@ checkout did not contain the backlog file.
 - Verification: `pytest` passes with 54 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
 
-## Current
-
 ### TASK-069 - Complete Help Coverage And Deploy
 
 - Status: Done.
@@ -142,12 +140,30 @@ checkout did not contain the backlog file.
   `slopstats` answered `@help`, `@help preview`, `@help highlights`,
   `@help wildcard`, and `@help help` with the updated deployed help text.
 
+## Current
+
+### TASK-070 - Resolve Highlight Links To MP4
+
+- Status: Local checks passed; deployment pending.
+- Goal: make `@highlights` share direct MLB MP4 playback links instead of
+  public MLB video page links when direct media is available.
+- Result: highlight parsing now prefers direct MP4 playback URLs from
+  `/api/v1/game/{gamePk}/content`, keeps the MLB video page URL separately, and
+  falls back through public video-page `og:video` metadata for slug-only items.
+  `@highlights` now prints the resolved MP4 URLs in IRC when available.
+- Verification: focused highlight parser/command tests pass; `pytest` passes
+  with 55 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
+  passes; `git diff --check` passes. A live client probe for game `822807`
+  resolved the Brandon Valenzuela sample highlight to
+  `https://mlb-cuts-diamond.mlb.com/FORGE/2026/2026-06/07/5ede2bd0-63d98c4c-69ac4da6-csvm-diamondgcp-asset_1280x720_59_4000K.mp4`.
+
 ## Next Candidates
 
 - Watch a naturally firing live alert in `#mlbtest` once games are active and
   make only narrow formatting tweaks if the alert context feels noisy in-channel.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after
-  deployment to judge IRC readability.
+  deployment to judge IRC readability and confirm `@highlights` returns MP4
+  URLs in-channel.
 - Consider whether `@teamleaders` should also get omitted-count formatting if a
   future category returns unusually long player names.
 - Add a Docker Compose config check to CI or another environment where Docker is

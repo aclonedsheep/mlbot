@@ -116,7 +116,7 @@ async def test_game_detail_uses_v11_live_feed() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_game_highlights_parse_mlb_video_slugs() -> None:
+async def test_game_highlights_prefer_mp4_video_urls() -> None:
     route = respx.get("https://statsapi.mlb.com/api/v1/game/123/content").mock(
         return_value=httpx.Response(
             200,
@@ -150,16 +150,30 @@ async def test_game_highlights_parse_mlb_video_slugs() -> None:
             },
         )
     )
+    page_route = respx.get("https://www.mlb.com/video/walk-off-single").mock(
+        return_value=httpx.Response(
+            200,
+            content=(
+                b'<meta property="og:video" '
+                b'content="https://clips.example/walk-off-single.mp4">'
+            ),
+            headers={"content-type": "text/html; charset=utf-8"},
+        )
+    )
 
     async with MLBStatsClient() as client:
         highlights = await client.get_game_highlights(123)
 
     assert route.called
+    assert page_route.called
     assert [highlight.title for highlight in highlights] == [
         "Walk-off single",
         "Big swing ties the game",
     ]
-    assert highlights[0].url == "https://www.mlb.com/video/walk-off-single"
+    assert highlights[0].url == "https://clips.example/walk-off-single.mp4"
+    assert highlights[0].page_url == "https://www.mlb.com/video/walk-off-single"
+    assert highlights[1].url == "https://clips.example/video.mp4"
+    assert highlights[1].page_url == "https://www.mlb.com/video/big-swing-ties-the-game"
     assert highlights[1].duration == "00:00:39"
 
 

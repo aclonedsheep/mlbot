@@ -42,8 +42,8 @@ Examples:
 - `@stars game GAMEPK`: top performers for one MLB game id.
 - `@weather TEAM [today|yesterday]`: game weather when available.
 - `@weather game GAMEPK`: weather for one MLB game id.
-- `@highlights TEAM [today|yesterday]`: compact MLB video highlight links.
-- `@highlights game GAMEPK`: compact MLB video highlight links for one MLB game id.
+- `@highlights TEAM [today|yesterday]`: compact MLB highlight MP4 links when available.
+- `@highlights game GAMEPK`: compact MLB highlight MP4 links for one MLB game id when available.
 - `@replay TEAM [today|yesterday]`: replay challenge usage/remaining.
 - `@replay game GAMEPK`: replay state for one MLB game id.
 - `@mlbpitcher TEAM`: current pitcher for that team's game, with game stats.

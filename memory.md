@@ -1,5 +1,37 @@
 # Project Memory
 
+## 2026-06-08 - TASK-070: Resolve Highlight Links To MP4
+
+- Goal: make `@highlights` share direct MLB MP4 playback links instead of
+  public MLB video page links when direct media is available.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-069 handoff-only deployment record commit; deployed app code is at
+  `a7350e895fd0ff93ea27954a95cab7d74c39b21f`.
+- Planned changes: prefer MP4 playback URLs from `/api/v1/game/{gamePk}/content`,
+  add an MLB video-page metadata fallback for slug-only highlight links, update
+  `@highlights` docs/tests to expect direct MP4 links, run local checks, commit,
+  and deploy so IRC receives the new links.
+- Changes: `GameHighlight` now keeps an optional `page_url`; game-content
+  parsing prefers direct MP4 playbacks, especially MLB's `mp4Avc` URL, before
+  falling back to public MLB video pages; slug-only MLB video links are resolved
+  through public page `og:video` metadata when needed; `@highlights` prints the
+  resolved MP4 URL because the formatter uses `GameHighlight.url`.
+- Verification: focused parser/command tests pass; `.\.venv\Scripts\python -m
+  pytest -q -o cache_dir=.tmp\task070-pytest-cache
+  --basetemp=.tmp\task070-pytest-basetemp` passes with 55 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff
+  --check` passes. A live client probe for game `822807` resolved the Brandon
+  Valenzuela sample highlight to
+  `https://mlb-cuts-diamond.mlb.com/FORGE/2026/2026-06/07/5ede2bd0-63d98c4c-69ac4da6-csvm-diamondgcp-asset_1280x720_59_4000K.mp4`.
+- Commit: pending.
+- Deployment: pending.
+- Resume prompt: Continue after TASK-070 local verification; `@highlights`
+  resolves MLB highlight page links to direct MP4 URLs when available, including
+  the Brandon Valenzuela sample URL. Next step is committing, deploying with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`, and
+  running a compact live `#mlbtest` `@highlights game 822807` check.
+
 ## 2026-06-08 - TASK-069: Complete Help Coverage And Deploy
 
 - Goal: make `@help` cover every command and subcommand/alias, then deploy the

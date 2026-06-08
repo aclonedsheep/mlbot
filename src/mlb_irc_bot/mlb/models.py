@@ -69,6 +69,7 @@ class GameHighlight:
     url: str
     blurb: str | None = None
     duration: str | None = None
+    page_url: str | None = None
 
 
 @dataclass(frozen=True)

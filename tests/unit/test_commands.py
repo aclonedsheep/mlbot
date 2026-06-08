@@ -446,13 +446,15 @@ class FakeClient:
         return [
             GameHighlight(
                 title="Vladimir Guerrero Jr.'s go-ahead homer",
-                url="https://www.mlb.com/video/vlad-go-ahead-homer",
+                url="https://clips.example/vlad-go-ahead-homer.mp4",
                 duration="00:00:42",
+                page_url="https://www.mlb.com/video/vlad-go-ahead-homer",
             ),
             GameHighlight(
                 title="Blue Jays turn two",
-                url="https://www.mlb.com/video/jays-turn-two",
+                url="https://clips.example/jays-turn-two.mp4",
                 duration="00:00:28",
+                page_url="https://www.mlb.com/video/jays-turn-two",
             ),
         ][:limit]
 
@@ -617,8 +619,8 @@ async def test_highlights_accepts_game_id() -> None:
 
     assert _plain(replies) == [
         "Highlights TOR @ BAL: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
-        "https://www.mlb.com/video/vlad-go-ahead-homer; Blue Jays turn two 00:00:28 "
-        "https://www.mlb.com/video/jays-turn-two"
+        "https://clips.example/vlad-go-ahead-homer.mp4; Blue Jays turn two 00:00:28 "
+        "https://clips.example/jays-turn-two.mp4"
     ]
 
 
