@@ -163,17 +163,28 @@ def format_game_preview(
     return _truncate(" | ".join(bits))
 
 
-def format_highlights(game: GameSummary, highlights: list[GameHighlight]) -> list[str]:
-    title = f"Highlights {_team_abbr(game.away, home=False)} @ {_team_abbr(game.home, home=True)}"
+def format_highlights(
+    game: GameSummary,
+    highlights: list[GameHighlight],
+    *,
+    start_index: int = 1,
+    total: int | None = None,
+    filter_label: str | None = None,
+) -> list[str]:
+    kind = f" {filter_label}" if filter_label else ""
+    title = (
+        f"Highlights{kind} {_team_abbr(game.away, home=False)} @ "
+        f"{_team_abbr(game.home, home=True)}"
+    )
     if not highlights:
         return [f"{irc.title(title)}: {irc.muted('none found.')}"]
     lines = []
-    total = len(highlights)
-    for index, highlight in enumerate(highlights, start=1):
+    total_count = total or len(highlights)
+    for index, highlight in enumerate(highlights, start=start_index):
         duration = f" {irc.muted(highlight.duration)}" if highlight.duration else ""
         lines.append(
             _truncate(
-                f"{irc.title(title)} {irc.value(f'{index}/{total}')}: "
+                f"{irc.title(title)} {irc.value(f'{index}/{total_count}')}: "
                 f"{irc.bold(highlight.title)}{duration} {highlight.url}"
             )
         )

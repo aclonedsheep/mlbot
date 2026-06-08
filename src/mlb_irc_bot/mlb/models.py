@@ -70,6 +70,7 @@ class GameHighlight:
     blurb: str | None = None
     duration: str | None = None
     page_url: str | None = None
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

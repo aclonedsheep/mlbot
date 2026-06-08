@@ -140,8 +140,6 @@ checkout did not contain the backlog file.
   `slopstats` answered `@help`, `@help preview`, `@help highlights`,
   `@help wildcard`, and `@help help` with the updated deployed help text.
 
-## Current
-
 ### TASK-070 - Resolve Highlight Links To MP4
 
 - Status: Done.
@@ -166,6 +164,24 @@ checkout did not contain the backlog file.
 - Live check: joined Libera `#mlbtest` as `AIHighlight656` and confirmed
   `@highlights game 822807` returned three separate IRC replies, each with a
   direct `.mp4` URL, including the Brandon Valenzuela sample URL.
+
+## Current
+
+### TASK-071 - Highlight Filters And More Paging
+
+- Status: Done.
+- Goal: add `@more` as a follow-up command for paged highlight results and add
+  useful highlight filters such as condensed games, scoring plays, homers,
+  defense, pitching, recaps, interviews, and data clips.
+- Result: highlights now carry parsed content tags from MLB metadata and
+  title/description text; `@highlights` accepts a filter before or after the
+  game/team selector; `@highlights filters` lists the available filters; and
+  `@more` emits the next page from the previous highlights result.
+- Verification: focused command/client tests pass; `pytest` passes with 58
+  tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes; `git
+  diff --check` passes. A live client probe for game `822807` classified 40
+  highlight items across condensed, scoring, homers, defense, pitching, recap,
+  interviews, data clips, and uncategorized highlights.
 
 ## Next Candidates
 

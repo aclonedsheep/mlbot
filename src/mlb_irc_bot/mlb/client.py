@@ -811,9 +811,19 @@ class MLBStatsClient:
             reverse=True,
         )
 
-    async def get_game_highlights(self, game_pk: int, *, limit: int = 3) -> list[GameHighlight]:
+    async def get_game_highlights(
+        self,
+        game_pk: int,
+        *,
+        limit: int | None = 3,
+        tag: str | None = None,
+    ) -> list[GameHighlight]:
         payload = await self._get(f"/v1/game/{game_pk}/content")
-        highlights = _parse_game_highlights(payload)[:limit]
+        highlights = _parse_game_highlights(payload)
+        if tag and tag != "all":
+            highlights = [highlight for highlight in highlights if tag in highlight.tags]
+        if limit is not None:
+            highlights = highlights[:limit]
         return await self._resolve_highlight_mp4_urls(highlights)
 
     async def resolve_video_mp4_url(self, video_url: str) -> str | None:
@@ -1209,6 +1219,7 @@ def _parse_game_highlights(payload: JsonDict) -> list[GameHighlight]:
                 blurb=item.get("blurb"),
                 duration=item.get("duration"),
                 page_url=_highlight_page_url(item),
+                tags=_highlight_tags(item),
             )
         )
     return parsed
@@ -1257,6 +1268,138 @@ def _first_playback_url(item: JsonDict) -> str:
 
 def _highlight_identity(item: JsonDict, url: str) -> str:
     return str(item.get("slug") or item.get("id") or url).strip().lower()
+
+
+def _highlight_tags(item: JsonDict) -> tuple[str, ...]:
+    text = _highlight_search_text(item)
+    keyword_text = _highlight_keyword_text(item)
+    tags: list[str] = []
+
+    def add(tag: str, condition: bool) -> None:
+        if condition and tag not in tags:
+            tags.append(tag)
+
+    add("condensed", _contains_any(text + " " + keyword_text, ("condensed game",)))
+    add("recap", _contains_any(keyword_text, ("game recap", "mlbcom_game_recap")))
+    add(
+        "interviews",
+        _contains_any(
+            text + " " + keyword_text,
+            (
+                "interview",
+                "press conference",
+                "manager postgame",
+                "postgame",
+                "talks",
+            ),
+        ),
+    )
+    add(
+        "defense",
+        _contains_any(
+            text + " " + keyword_text,
+            (
+                "defense",
+                "throws out",
+                "throw out",
+                "double play",
+                "diving",
+                "catch",
+                "robs",
+                "fielding",
+            ),
+        ),
+    )
+    add(
+        "pitching",
+        _contains_any(
+            text + " " + keyword_text,
+            (
+                "pitching",
+                "strikes out",
+                "strikeout",
+                "called out on strikes",
+                "outing",
+                "pitches",
+                "save",
+            ),
+        ),
+    )
+    add("homers", _contains_any(text, ("homer", "home run", "go deep", "goes deep")))
+    add(
+        "scoring",
+        _contains_any(
+            text,
+            (
+                "rbi",
+                "runs",
+                "scores",
+                "score",
+                "homer",
+                "home run",
+                "sacrifice fly",
+                "walk-off",
+            ),
+        ),
+    )
+    add(
+        "data",
+        _contains_any(
+            text + " " + keyword_text,
+            (
+                "data visualization",
+                "data viz",
+                "bat tracking",
+                "distance behind",
+                "deep dive",
+                "breaking down",
+                "visualizing",
+                "starting lineup",
+                "bench availability",
+                "fielding alignment",
+                "bullpen availability",
+            ),
+        ),
+    )
+    if not tags:
+        tags.append("highlights")
+    return tuple(tags)
+
+
+def _highlight_search_text(item: JsonDict) -> str:
+    values = [
+        item.get("headline"),
+        item.get("title"),
+        item.get("blurb"),
+        item.get("description"),
+        item.get("slug"),
+        item.get("id"),
+        item.get("kicker"),
+    ]
+    return " ".join(str(value) for value in values if value).casefold()
+
+
+def _highlight_keyword_text(item: JsonDict) -> str:
+    values: list[str] = []
+    for key in ("keywords", "keywordsDisplay", "keywordsAll"):
+        for keyword in item.get(key) or ():
+            if isinstance(keyword, dict):
+                values.extend(
+                    str(value)
+                    for value in (
+                        keyword.get("displayName"),
+                        keyword.get("slug"),
+                        keyword.get("value"),
+                    )
+                    if value
+                )
+            elif keyword:
+                values.append(str(keyword))
+    return " ".join(values).casefold()
+
+
+def _contains_any(value: str, needles: tuple[str, ...]) -> bool:
+    return any(needle in value for needle in needles)
 
 
 def _is_mp4_url(url: str) -> bool:

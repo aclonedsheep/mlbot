@@ -42,8 +42,9 @@ Examples:
 - `@stars game GAMEPK`: top performers for one MLB game id.
 - `@weather TEAM [today|yesterday]`: game weather when available.
 - `@weather game GAMEPK`: weather for one MLB game id.
-- `@highlights TEAM [today|yesterday]`: compact MLB highlight MP4 links when available.
-- `@highlights game GAMEPK`: compact MLB highlight MP4 links for one MLB game id when available.
+- `@highlights TEAM [today|yesterday] [filter]`: compact MLB highlight MP4 links when available.
+- `@highlights [filter] game GAMEPK`: compact MLB highlight MP4 links for one MLB game id when available.
+- `@more`: next page from the previous highlights result.
 - `@replay TEAM [today|yesterday]`: replay challenge usage/remaining.
 - `@replay game GAMEPK`: replay state for one MLB game id.
 - `@mlbpitcher TEAM`: current pitcher for that team's game, with game stats.
@@ -59,6 +60,9 @@ Examples:
 @stars game 824832
 @weather LAD
 @highlights game 824832
+@highlights scoring game 824832
+@highlights game 824832 homers
+@more
 @replay TOR
 @mlbpitcher NYY
 @mlbpitchers LAD
@@ -119,6 +123,10 @@ Examples:
 - `@help`: all commands.
 - `@help <command>`: detailed help for any command or alias, such as
   `@help mlb`, `@help matchup`, `@help wildcard`, or `@help highlights`.
+
+Highlight filters include `all`, `condensed`, `scoring`, `homers`, `defense`,
+`pitching`, `recap`, `interviews`, and `data`. Use `@highlights filters` to
+list them in IRC.
 
 Common split aliases include `risp`, `vl`, `vr`, `home`, `away`, `lateclose`,
 `basesloaded`, `day`, `night`, `grass`, `turf`, `ahead`, `behind`, `tied`,

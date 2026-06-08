@@ -1,5 +1,6 @@
 import shlex
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from re import fullmatch
 
@@ -44,13 +45,62 @@ from mlb_irc_bot.mlb.formatters import (
     format_weather,
     format_win_probability_summary,
 )
-from mlb_irc_bot.mlb.models import GameDetail, GameSummary, PlayerSearchResult, TeamInfo
+from mlb_irc_bot.mlb.models import (
+    GameDetail,
+    GameHighlight,
+    GameSummary,
+    PlayerSearchResult,
+    TeamInfo,
+)
 from mlb_irc_bot.mlb.teams import TEAM_DIRECTORY, TeamDirectory, TeamRecord
 
 DATE_WORDS = {"today", "tomorrow", "yesterday"}
 STAT_GROUPS = {"hitting", "pitching", "fielding"}
 STAT_WINDOW_WORDS = {"day", "days"}
 GAME_WINDOW_WORDS = {"game", "games"}
+HIGHLIGHT_PAGE_SIZE = 3
+HIGHLIGHT_FILTER_ALIASES = {
+    "all": "all",
+    "any": "all",
+    "condensed": "condensed",
+    "condensedgame": "condensed",
+    "condensedgames": "condensed",
+    "scoring": "scoring",
+    "scores": "scoring",
+    "rbi": "scoring",
+    "runs": "scoring",
+    "hr": "homers",
+    "hrs": "homers",
+    "homer": "homers",
+    "homers": "homers",
+    "homerun": "homers",
+    "homeruns": "homers",
+    "home-runs": "homers",
+    "defense": "defense",
+    "fielding": "defense",
+    "pitching": "pitching",
+    "strikeouts": "pitching",
+    "recap": "recap",
+    "recaps": "recap",
+    "interview": "interviews",
+    "interviews": "interviews",
+    "postgame": "interviews",
+    "data": "data",
+    "dataviz": "data",
+    "statcast": "data",
+    "viz": "data",
+}
+HIGHLIGHT_FILTER_LABELS = {
+    "all": "all",
+    "condensed": "condensed games",
+    "scoring": "scoring plays",
+    "homers": "homers",
+    "defense": "defense",
+    "pitching": "pitching",
+    "recap": "recaps",
+    "interviews": "interviews",
+    "data": "data clips",
+}
 MAX_STAT_WINDOW_DAYS = 60
 MAX_LAST_GAMES = 30
 MAX_LEADERS_LIMIT = 10
@@ -66,6 +116,14 @@ DEFAULT_TEAM_LEADER_CATEGORIES = [
 ]
 
 
+@dataclass
+class HighlightCursor:
+    game: GameSummary
+    highlights: list[GameHighlight]
+    next_index: int
+    tag: str | None
+
+
 class CommandRouter:
     def __init__(
         self,
@@ -79,6 +137,7 @@ class CommandRouter:
         self.settings = settings
         self.teams = teams
         self.now = now or (lambda: datetime.now(settings.zoneinfo()))
+        self._highlight_cursor: HighlightCursor | None = None
 
     async def handle_message(self, text: str) -> list[str] | None:
         prefix = self.settings.command_prefix
@@ -140,6 +199,8 @@ class CommandRouter:
                 return await self._transactions(args)
             if command == "highlights":
                 return await self._highlights(args)
+            if command == "more":
+                return self._more(args)
             if command == "help":
                 return self._help(args)
         except MLBAPIError as exc:
@@ -584,11 +645,95 @@ class CommandRouter:
         return [format_transactions(transactions, title=title)]
 
     async def _highlights(self, args: list[str]) -> list[str]:
-        game, message = await self._detail_game_from_args(args, "highlights", allow_upcoming=True)
+        if args and args[0].lower() in {"filters", "kinds", "types"}:
+            return [self._highlight_filters_help()]
+        tag, detail_args = self._parse_highlight_args(args)
+        game, message = await self._detail_game_from_args(
+            detail_args, "highlights", allow_upcoming=True
+        )
         if game is None:
             return [message]
-        highlights = await self.client.get_game_highlights(game.game_pk, limit=3)
-        return format_highlights(game, highlights)
+        highlights = await self.client.get_game_highlights(game.game_pk, limit=None, tag=tag)
+        return self._highlight_page(game, highlights, tag=tag, start=0)
+
+    def _more(self, args: list[str]) -> list[str]:
+        if args and args[0].lower() not in {"highlights"}:
+            return [
+                f"{irc.warning('Usage')}: "
+                f"{irc.bold(f'{self.settings.command_prefix}more')} after a highlights command."
+            ]
+        if self._highlight_cursor is None:
+            return [
+                f"{irc.muted('Nothing more to show.')} "
+                f"Run {irc.bold(f'{self.settings.command_prefix}highlights')} first."
+            ]
+        cursor = self._highlight_cursor
+        return self._highlight_page(
+            cursor.game,
+            cursor.highlights,
+            tag=cursor.tag,
+            start=cursor.next_index,
+        )
+
+    def _parse_highlight_args(self, args: list[str]) -> tuple[str | None, list[str]]:
+        tag: str | None = None
+        detail_args: list[str] = []
+        for arg in args:
+            alias = _highlight_filter_alias(arg)
+            if alias is None:
+                detail_args.append(arg)
+                continue
+            if tag is not None and tag != alias:
+                raise ValueError("highlights accepts at most one filter.")
+            tag = alias
+        return (None if tag == "all" else tag), detail_args
+
+    def _highlight_page(
+        self,
+        game: GameSummary,
+        highlights: list[GameHighlight],
+        *,
+        tag: str | None,
+        start: int,
+    ) -> list[str]:
+        page = highlights[start : start + HIGHLIGHT_PAGE_SIZE]
+        label = _highlight_filter_label(tag)
+        if not page:
+            self._highlight_cursor = None
+            return format_highlights(game, [], filter_label=label)
+
+        next_index = start + len(page)
+        if next_index < len(highlights):
+            self._highlight_cursor = HighlightCursor(
+                game=game,
+                highlights=highlights,
+                next_index=next_index,
+                tag=tag,
+            )
+        else:
+            self._highlight_cursor = None
+
+        lines = format_highlights(
+            game,
+            page,
+            start_index=start + 1,
+            total=len(highlights),
+            filter_label=label,
+        )
+        remaining = len(highlights) - next_index
+        if remaining:
+            lines.append(
+                f"{irc.muted(f'{remaining} more highlights.')} "
+                f"Use {irc.bold(f'{self.settings.command_prefix}more')}."
+            )
+        return lines
+
+    def _highlight_filters_help(self) -> str:
+        filters = ", ".join(HIGHLIGHT_FILTER_LABELS.values())
+        return (
+            f"{irc.title('Highlight filters')}: {filters}. "
+            f"Example: {irc.bold(f'{self.settings.command_prefix}highlights scoring game 822807')}"
+        )
 
     def _help(self, args: list[str]) -> list[str]:
         prefix = self.settings.command_prefix
@@ -614,7 +759,13 @@ class CommandRouter:
         if topic == "highlights":
             return [
                 f"{irc.bold(f'{prefix}highlights')} TEAM [today|yesterday] or "
-                f"{irc.bold(f'{prefix}highlights game')} GAMEPK"
+                f"{irc.bold(f'{prefix}highlights game')} GAMEPK; filters: "
+                "condensed, scoring, homers, defense, pitching, recap, interviews, data"
+            ]
+        if topic == "more":
+            return [
+                f"{irc.bold(f'{prefix}more')} shows the next page from the previous "
+                f"{irc.bold(f'{prefix}highlights')} result"
             ]
         if topic == "wp":
             return [
@@ -716,7 +867,7 @@ class CommandRouter:
             f"{irc.bold(f'{prefix}teamleaders')}, {irc.bold(f'{prefix}leaders')}, "
             f"{irc.bold(f'{prefix}defense')}, {irc.bold(f'{prefix}arsenal')} | "
             f"{irc.section('other')}: {irc.bold(f'{prefix}transactions')}, "
-            f"{irc.bold(f'{prefix}help <command>')}"
+            f"{irc.bold(f'{prefix}more')}, {irc.bold(f'{prefix}help <command>')}"
         ]
 
     def _sstats_usage(self) -> str:
@@ -1146,6 +1297,19 @@ def _default_stat_group_for_position(position: str | None) -> str:
 
 def _team_info(team: TeamRecord) -> TeamInfo:
     return TeamInfo(id=team.team_id, name=team.name, abbreviation=team.abbreviation)
+
+
+def _highlight_filter_alias(value: str) -> str | None:
+    compact = value.strip().replace("_", "").replace(" ", "").lower()
+    return HIGHLIGHT_FILTER_ALIASES.get(compact) or HIGHLIGHT_FILTER_ALIASES.get(
+        value.strip().lower()
+    )
+
+
+def _highlight_filter_label(tag: str | None) -> str | None:
+    if tag is None:
+        return None
+    return HIGHLIGHT_FILTER_LABELS.get(tag, tag)
 
 
 def _transaction_title(

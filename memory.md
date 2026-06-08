@@ -1,5 +1,40 @@
 # Project Memory
 
+## 2026-06-08 - TASK-071: Highlight Filters And More Paging
+
+- Goal: add `@more` as a follow-up command for paged highlight results and add
+  highlight filters for useful content types such as condensed games, scoring
+  plays, homers, defense, pitching, recaps, interviews, and data clips.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-070 handoff-only deployment record commit; deployed app code is at
+  `5a8f78ad5aa362206cb11754226f2173ae777671`.
+- Planned changes: classify highlights from MLB content metadata and text,
+  teach `@highlights` to accept a filter token before or after the game/team
+  selector, store the remaining result cursor in the router, add `@more` to
+  emit subsequent highlight pages, update help/docs/tests, run local checks,
+  and commit.
+- Changes: highlights now carry parsed content tags from MLB keywords,
+  title/description text, and slugs; filters include condensed games, scoring
+  plays, homers, defense, pitching, recaps, interviews, and data clips;
+  `@highlights` accepts a filter before or after the game/team selector;
+  `@highlights filters` lists available filters; `@more` emits the next page
+  from the previous highlights result using an in-router cursor.
+- Verification: focused command/client tests pass; `.\.venv\Scripts\python -m
+  pytest -q -o cache_dir=.tmp\task071-pytest-cache
+  --basetemp=.tmp\task071-pytest-basetemp` passes with 58 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff
+  --check` passes. A live client probe for game `822807` classified 40
+  highlights: condensed=1, scoring=19, homers=14, defense=2, pitching=7,
+  recap=1, interviews=2, data=17, and uncategorized highlights=4.
+- Commit: pending.
+- Deployment: not requested.
+- Resume prompt: Continue after TASK-071 local verification; `@highlights`
+  supports filters such as condensed, scoring, homers, defense, pitching, recap,
+  interviews, and data, and `@more` pages through the previous highlights
+  result. Next step is committing with `[TASK-071]`; deploy only if the new IRC
+  command behavior should go live immediately.
+
 ## 2026-06-08 - TASK-070: Resolve Highlight Links To MP4
 
 - Goal: make `@highlights` share direct MLB MP4 playback links instead of

@@ -127,6 +127,7 @@ async def test_game_highlights_prefer_mp4_video_urls() -> None:
                             {
                                 "headline": "Big swing ties the game",
                                 "slug": "big-swing-ties-the-game",
+                                "description": "Big swing ties the game with a two-run homer.",
                                 "duration": "00:00:39",
                                 "playbacks": [
                                     {
@@ -174,7 +175,13 @@ async def test_game_highlights_prefer_mp4_video_urls() -> None:
     assert highlights[0].page_url == "https://www.mlb.com/video/walk-off-single"
     assert highlights[1].url == "https://clips.example/video.mp4"
     assert highlights[1].page_url == "https://www.mlb.com/video/big-swing-ties-the-game"
+    assert highlights[1].tags == ("homers", "scoring")
     assert highlights[1].duration == "00:00:39"
+
+    async with MLBStatsClient() as client:
+        homer_highlights = await client.get_game_highlights(123, limit=None, tag="homers")
+
+    assert [highlight.title for highlight in homer_highlights] == ["Big swing ties the game"]
 
 
 @pytest.mark.asyncio

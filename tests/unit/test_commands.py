@@ -442,21 +442,47 @@ class FakeClient:
             ),
         ]
 
-    async def get_game_highlights(self, game_pk: int, *, limit: int):
-        return [
+    async def get_game_highlights(self, game_pk: int, *, limit: int | None, tag: str | None = None):
+        highlights = [
+            GameHighlight(
+                title="Condensed Game: TOR@BAL",
+                url="https://clips.example/condensed.mp4",
+                duration="00:08:42",
+                page_url="https://www.mlb.com/video/condensed-game-tor-bal",
+                tags=("condensed",),
+            ),
             GameHighlight(
                 title="Vladimir Guerrero Jr.'s go-ahead homer",
                 url="https://clips.example/vlad-go-ahead-homer.mp4",
                 duration="00:00:42",
                 page_url="https://www.mlb.com/video/vlad-go-ahead-homer",
+                tags=("scoring", "homers"),
             ),
             GameHighlight(
                 title="Blue Jays turn two",
                 url="https://clips.example/jays-turn-two.mp4",
                 duration="00:00:28",
                 page_url="https://www.mlb.com/video/jays-turn-two",
+                tags=("defense",),
             ),
-        ][:limit]
+            GameHighlight(
+                title="Andres Gimenez's RBI double",
+                url="https://clips.example/gimenez-rbi-double.mp4",
+                duration="00:00:20",
+                page_url="https://www.mlb.com/video/gimenez-rbi-double",
+                tags=("scoring",),
+            ),
+            GameHighlight(
+                title="Manager talks after the win",
+                url="https://clips.example/manager-talks.mp4",
+                duration="00:01:45",
+                page_url="https://www.mlb.com/video/manager-talks",
+                tags=("interviews",),
+            ),
+        ]
+        if tag:
+            highlights = [highlight for highlight in highlights if tag in highlight.tags]
+        return highlights if limit is None else highlights[:limit]
 
 
 def settings() -> SimpleNamespace:
@@ -498,7 +524,7 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
         "@weather, @highlights, @replay, @mlbpitcher, @mlbpitchers, @mlblineup | "
         "standings: @standings, @wildcard | stats: @sstats, @gamelog, "
         "@splits, @teamstats, @teamrank, @teamleaders, @leaders, @defense, "
-        "@arsenal | other: @transactions, @help <command>"
+        "@arsenal | other: @transactions, @more, @help <command>"
     ]
     assert _plain(error_replies) == ["Unknown command: @bogus. Try @help."]
     assert BOLD in help_replies[0]
@@ -535,6 +561,7 @@ async def test_help_topics_cover_all_commands_and_aliases() -> None:
         "arsenal",
         "transactions",
         "highlights",
+        "more",
         "help",
     ]
 
@@ -618,10 +645,64 @@ async def test_highlights_accepts_game_id() -> None:
     replies = await router.handle_message("@highlights game 824832")
 
     assert _plain(replies) == [
-        "Highlights TOR @ BAL 1/2: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
+        "Highlights TOR @ BAL 1/5: Condensed Game: TOR@BAL 00:08:42 "
+        "https://clips.example/condensed.mp4",
+        "Highlights TOR @ BAL 2/5: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
         "https://clips.example/vlad-go-ahead-homer.mp4",
-        "Highlights TOR @ BAL 2/2: Blue Jays turn two 00:00:28 "
-        "https://clips.example/jays-turn-two.mp4"
+        "Highlights TOR @ BAL 3/5: Blue Jays turn two 00:00:28 "
+        "https://clips.example/jays-turn-two.mp4",
+        "2 more highlights. Use @more."
+    ]
+
+
+@pytest.mark.asyncio
+async def test_more_returns_next_highlight_page() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    await router.handle_message("@highlights game 824832")
+    replies = await router.handle_message("@more")
+    exhausted = await router.handle_message("@more")
+
+    assert _plain(replies) == [
+        "Highlights TOR @ BAL 4/5: Andres Gimenez's RBI double 00:00:20 "
+        "https://clips.example/gimenez-rbi-double.mp4",
+        "Highlights TOR @ BAL 5/5: Manager talks after the win 00:01:45 "
+        "https://clips.example/manager-talks.mp4",
+    ]
+    assert _plain(exhausted) == ["Nothing more to show. Run @highlights first."]
+
+
+@pytest.mark.asyncio
+async def test_highlights_filters_before_or_after_game_id() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    homers = await router.handle_message("@highlights homers game 824832")
+    scoring = await router.handle_message("@highlights game 824832 scoring")
+
+    assert _plain(homers) == [
+        "Highlights homers TOR @ BAL 1/1: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
+        "https://clips.example/vlad-go-ahead-homer.mp4"
+    ]
+    assert _plain(scoring) == [
+        "Highlights scoring plays TOR @ BAL 1/2: "
+        "Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
+        "https://clips.example/vlad-go-ahead-homer.mp4",
+        "Highlights scoring plays TOR @ BAL 2/2: Andres Gimenez's RBI double 00:00:20 "
+        "https://clips.example/gimenez-rbi-double.mp4",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_highlights_lists_filters() -> None:
+    router = CommandRouter(client=FakeClient(), settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@highlights filters")
+
+    assert _plain(replies) == [
+        "Highlight filters: all, condensed games, scoring plays, homers, defense, "
+        "pitching, recaps, interviews, data clips. Example: @highlights scoring game 822807"
     ]
 
 
