@@ -59,8 +59,6 @@ checkout did not contain the backlog file.
   windows because the live feed still had only the same alert keys that were
   baselined at scheduler startup.
 
-## Current
-
 ### TASK-065 - Add Alert Game Context And Calmer Formatting
 
 - Status: Done.
@@ -80,10 +78,26 @@ checkout did not contain the backlog file.
   post-deploy probe showed the container running with `restarts=0` and the
   remote checkout clean at `62519428bdbab99d240b326ac10af809a7db31bc`.
 
+## Current
+
+### TASK-066 - Preview Deployed Formatting
+
+- Status: Done.
+- Goal: preview the deployed TASK-065 formatting in real `#mlbtest` before
+  making additional style changes.
+- Result: joined Libera `#mlbtest` as `AIFormatCheck606` and ran `@help`,
+  `@mlb *`, `@mlb NYY`, `@box NYY`, and `@sstats Ohtani hitting`. `mlbotslop`
+  returned one readable response for each command; the raw IRC controls showed
+  high-signal color on titles/states, calmer bold/italic emphasis for routine
+  command and stat labels, and balanced resets.
+- Verification: `pytest` passes with 48 tests; `ruff check .` passes;
+  `python -m mlb_irc_bot --dry-run` passes.
+- Gap: no live games were active during the sweep, so no naturally firing alert
+  could be visually judged.
+
 ## Next Candidates
 
-- Preview TASK-065 formatting in real `#mlbtest`, especially `@help`, `@mlb *`,
-  `@mlb TEAM`, `@box TEAM`, one stat-heavy command, and any live alert that
-  fires naturally.
+- Watch a naturally firing live alert in `#mlbtest` once games are active and
+  make only narrow formatting tweaks if the alert context feels noisy in-channel.
 - Add a Docker Compose config check to CI or another environment where Docker is
   available.

@@ -1,5 +1,38 @@
 # Project Memory
 
+## 2026-06-08 - TASK-066: Preview Deployed Formatting
+
+- Goal: preview the deployed TASK-065 IRC formatting in real `#mlbtest` and
+  record whether the calmer command/alert output is acceptable or needs a
+  follow-up tweak.
+- Starting point: `main` is clean and synced with `origin/main` at `75ba89a`;
+  TASK-065 is documented as deployed to `mlbotslop` in Libera `#mlbtest`, and
+  the backlog's next candidate is a focused live formatting preview.
+- Planned changes: run the standard local checks, perform a compact live command
+  sweep covering `@help`, `@mlb *`, `@mlb TEAM`, `@box TEAM`, and one
+  stat-heavy command, then update `docs/tasks/backlog.md` and this handoff with
+  the results.
+- Local verification: `.\.venv\Scripts\python -m pytest -q -o
+  cache_dir=.tmp\task066-pytest-cache
+  --basetemp=.tmp\task066-pytest-basetemp` passes with 48 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Live preview: joined Libera `#mlbtest` as `AIFormatCheck606` and ran
+  `@help`, `@mlb *`, `@mlb NYY`, `@box NYY`, and `@sstats Ohtani hitting`.
+  `mlbotslop` returned one readable response for each command. The deployed
+  formatting looked acceptably calm in raw IRC control output: colors were
+  limited to titles/states, routine command/stat labels used bold or italic
+  emphasis, and resets were balanced.
+- Gap: no live games were active during the preview, so no naturally firing
+  alert could be judged in-channel.
+- Commit: pending.
+- Resume prompt: Continue after TASK-066; deployed command formatting was
+  previewed successfully in `#mlbtest`. The next useful live check is to watch a
+  naturally firing alert when games are active and tweak alert presentation only
+  if the added game context feels noisy in-channel. The Docker Compose config
+  check remains a separate environment/CI candidate because Docker is not on
+  this Windows PATH.
+
 ## 2026-06-08 - TASK-065: Add Alert Game Context And Calmer Formatting
 
 - Goal: make live announcements more informative at a glance by adding score,
