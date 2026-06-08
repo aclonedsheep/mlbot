@@ -15,6 +15,8 @@ codes for readability. The examples below are plaintext.
 - `@mlb TEAM tomorrow`: tomorrow's game for a team.
 - `@mlb TEAM yesterday`: previous day result for a team.
 - `@mlb game GAMEPK`: details for one MLB game id.
+- `@preview TEAM [today|tomorrow|yesterday]`: compact game preview with probables, weather, lineup status, and team form when available.
+- `@matchup TEAM [today|tomorrow|yesterday]`: alias for `@preview`.
 
 Examples:
 
@@ -24,6 +26,8 @@ Examples:
 @mlb NYY
 @mlb LAD tomorrow
 @mlb game 824832
+@preview NYY
+@matchup LAD tomorrow
 ```
 
 ## Game Details
@@ -36,6 +40,8 @@ Examples:
 - `@stars game GAMEPK`: top performers for one MLB game id.
 - `@weather TEAM [today|yesterday]`: game weather when available.
 - `@weather game GAMEPK`: weather for one MLB game id.
+- `@highlights TEAM [today|yesterday]`: compact MLB video highlight links.
+- `@highlights game GAMEPK`: compact MLB video highlight links for one MLB game id.
 - `@replay TEAM [today|yesterday]`: replay challenge usage/remaining.
 - `@replay game GAMEPK`: replay state for one MLB game id.
 - `@mlbpitcher TEAM`: current pitcher for that team's game, with game stats.
@@ -50,6 +56,7 @@ Examples:
 @wp NYY
 @stars game 824832
 @weather LAD
+@highlights game 824832
 @replay TOR
 @mlbpitcher NYY
 @mlbpitchers LAD
@@ -70,8 +77,8 @@ Examples:
 
 - `@sstats <player name> [hitting|pitching|fielding] [season] [7 days|14 days|30 days|last N games]`: season stats, recent date-range stats, or last-N-games stats. Pitchers default to pitching stats; everyone else defaults to hitting.
 - `@gamelog <player name> [hitting|pitching] [N]`: recent game log lines.
-- `@splits <player name> <risp|vl|vr|home|away|lateclose|basesloaded> [hitting|pitching] [season]`: situational player splits.
-- `@teamstats TEAM [hitting|pitching] [season] [7 days|14 days|30 days] [risp|vl|vr|home|away|lateclose|basesloaded]`: team hitting and/or pitching stats, including situation splits.
+- `@splits <player name> <split> [hitting|pitching] [season]`: situational player splits.
+- `@teamstats TEAM [hitting|pitching] [season] [7 days|14 days|30 days] [split]`: team hitting and/or pitching stats, including situation splits.
 - `@teamrank <stat> [hitting|pitching] [limit]`: team rankings for stats such as OPS, HR, ERA, WHIP, runs, and strikeouts. Limit is capped at 10.
 - `@teamleaders TEAM [category] [limit]`: team leaders for one category, or a compact default set. Limit is capped at 5.
 - `@defense <player name> [season]`: defense stats such as Outs Above Average and fielding runs prevented when available.
@@ -90,9 +97,11 @@ Examples:
 @sstats Aaron Judge last 7 games
 @gamelog Aaron Judge 5
 @splits Aaron Judge risp
+@splits Aaron Judge night
 @teamstats TOR
 @teamstats LAD pitching 14 days
 @teamstats TOR hitting risp
+@teamstats LAD pitching reliever
 @teamrank ops 5
 @teamleaders TOR hr
 @defense Daulton Varsho
@@ -107,3 +116,8 @@ Examples:
 
 - `@help`: all commands.
 - `@help mlb`: detailed help for `@mlb`.
+
+Common split aliases include `risp`, `vl`, `vr`, `home`, `away`, `lateclose`,
+`basesloaded`, `day`, `night`, `grass`, `turf`, `ahead`, `behind`, `tied`,
+`starter`, `reliever`, `firsthalf`, `secondhalf`, `preallstar`, `postallstar`,
+`vsal`, `vsnl`, `interleague`, and batting-order aliases `b1` through `b9`.

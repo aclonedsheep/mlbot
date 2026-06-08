@@ -232,6 +232,7 @@ def settings() -> SimpleNamespace:
         enable_alert_barrel=True,
         enable_alert_late_threat=True,
         enable_alert_weather=True,
+        enable_alert_lead_changes=True,
     )
 
 

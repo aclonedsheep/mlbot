@@ -158,6 +158,9 @@ class LiveScheduler:
             "barrel": self.settings.enable_alert_barrel,
             "late_threat": self.settings.enable_alert_late_threat,
             "weather": self.settings.enable_alert_weather,
+            "lead_change": self.settings.enable_alert_lead_changes,
+            "tie_game": self.settings.enable_alert_lead_changes,
+            "walkoff": self.settings.enable_alert_lead_changes,
         }.get(alert_type, True)
 
     def _should_suppress_existing_alerts(self, game: GameSummary) -> bool:

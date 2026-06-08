@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     enable_alert_barrel: bool = True
     enable_alert_late_threat: bool = True
     enable_alert_weather: bool = True
+    enable_alert_lead_changes: bool = True
 
     alert_hard_hit_threshold_mph: float = Field(default=110.0, ge=0)
     alert_win_probability_threshold: float = Field(default=15.0, ge=0)

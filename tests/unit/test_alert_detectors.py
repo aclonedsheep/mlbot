@@ -254,6 +254,85 @@ def test_collect_alerts_detects_new_contextual_alerts() -> None:
     )
 
 
+def test_collect_alerts_detects_tie_go_ahead_and_walkoff_scoring_state() -> None:
+    feed = {
+        "gameData": {
+            "game": {"pk": 888},
+            "status": {"abstractGameState": "Final", "detailedState": "Final"},
+            "teams": {
+                "away": {"abbreviation": "TOR"},
+                "home": {"abbreviation": "BAL"},
+            },
+        },
+        "liveData": {
+            "plays": {
+                "scoringPlays": [0, 1, 2, 3],
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 1, "inning": 2, "halfInning": "top"},
+                        "result": {
+                            "event": "Single",
+                            "description": "Toronto opens the scoring.",
+                            "awayScore": 1,
+                            "homeScore": 0,
+                        },
+                    },
+                    {
+                        "about": {"atBatIndex": 2, "inning": 4, "halfInning": "bottom"},
+                        "result": {
+                            "event": "Double",
+                            "description": "Baltimore ties the game.",
+                            "awayScore": 1,
+                            "homeScore": 1,
+                        },
+                    },
+                    {
+                        "about": {"atBatIndex": 3, "inning": 7, "halfInning": "top"},
+                        "result": {
+                            "event": "Home Run",
+                            "description": "Toronto goes back in front.",
+                            "awayScore": 3,
+                            "homeScore": 1,
+                        },
+                    },
+                    {
+                        "about": {"atBatIndex": 4, "inning": 9, "halfInning": "bottom"},
+                        "result": {
+                            "event": "Single",
+                            "description": "Baltimore walks it off.",
+                            "awayScore": 3,
+                            "homeScore": 4,
+                        },
+                    },
+                ],
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed)
+    by_type = {
+        alert.alert_type: strip_irc_formatting(alert.message)
+        for alert in alerts
+        if alert.alert_type in {"tie_game", "lead_change", "walkoff"}
+    }
+
+    assert by_type["tie_game"] == (
+        "Tie game: BAL ties it on Baltimore ties the game. | TOR 1, BAL 1 | Bottom 4"
+    )
+    assert by_type["lead_change"] == (
+        "Go-ahead: TOR takes the lead on Toronto goes back in front. | "
+        "TOR 3, BAL 1 | Top 7"
+    )
+    assert by_type["walkoff"] == (
+        "Walk-off: BAL wins on Baltimore walks it off. | TOR 3, BAL 4 | Bottom 9"
+    )
+    first_run_message = "Go-ahead: TOR takes the lead on Toronto opens"
+    assert not any(
+        strip_irc_formatting(alert.message).startswith(first_run_message)
+        for alert in alerts
+    )
+
+
 def _strikeout_half_inning() -> list[dict]:
     plays = []
     for index in range(3):

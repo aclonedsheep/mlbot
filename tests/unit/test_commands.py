@@ -9,6 +9,7 @@ from mlb_irc_bot.irc_format import BOLD, COLOR, ITALIC, strip_irc_formatting
 from mlb_irc_bot.mlb.formatters import MAX_IRC_LEN, format_leaders
 from mlb_irc_bot.mlb.models import (
     GameDetail,
+    GameHighlight,
     GameLogEntry,
     GameSummary,
     Leader,
@@ -133,6 +134,45 @@ class FakeClient:
                     streak="W1",
                     last_ten="6-4",
                 )
+            )
+        if standings_type == "regularSeason" and league is None:
+            records.extend(
+                [
+                    StandingTeam(
+                        team_id=141,
+                        team_name="Toronto Blue Jays",
+                        abbreviation="TOR",
+                        league_name="American League",
+                        division_name="AL East",
+                        wins=31,
+                        losses=26,
+                        pct=".544",
+                        games_back="4.5",
+                        wild_card_games_back="1.0",
+                        division_rank="3",
+                        league_rank="6",
+                        wild_card_rank="3",
+                        streak="W1",
+                        last_ten="6-4",
+                    ),
+                    StandingTeam(
+                        team_id=110,
+                        team_name="Baltimore Orioles",
+                        abbreviation="BAL",
+                        league_name="American League",
+                        division_name="AL East",
+                        wins=28,
+                        losses=30,
+                        pct=".483",
+                        games_back="8.0",
+                        wild_card_games_back="4.5",
+                        division_rank="4",
+                        league_rank="9",
+                        wild_card_rank="7",
+                        streak="L2",
+                        last_ten="4-6",
+                    ),
+                ]
             )
         return records
 
@@ -402,6 +442,20 @@ class FakeClient:
             ),
         ]
 
+    async def get_game_highlights(self, game_pk: int, *, limit: int):
+        return [
+            GameHighlight(
+                title="Vladimir Guerrero Jr.'s go-ahead homer",
+                url="https://www.mlb.com/video/vlad-go-ahead-homer",
+                duration="00:00:42",
+            ),
+            GameHighlight(
+                title="Blue Jays turn two",
+                url="https://www.mlb.com/video/jays-turn-two",
+                duration="00:00:28",
+            ),
+        ][:limit]
+
 
 def settings() -> SimpleNamespace:
     return SimpleNamespace(command_prefix="@", zoneinfo=lambda: ZoneInfo("America/New_York"))
@@ -438,8 +492,8 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
     error_replies = await router.handle_message("@bogus")
 
     assert _plain(help_replies) == [
-        "Commands: games: @mlb, @mlb *, @mlb TEAM, @box, @wp, @stars, "
-        "@weather, @replay, @mlbpitcher, @mlbpitchers, @mlblineup | "
+        "Commands: games: @mlb, @mlb *, @mlb TEAM, @preview, @box, @wp, @stars, "
+        "@weather, @highlights, @replay, @mlbpitcher, @mlbpitchers, @mlblineup | "
         "standings: @standings, @wildcard | stats: @sstats, @gamelog, "
         "@splits, @teamstats, @teamrank, @teamleaders, @leaders, @defense, "
         "@arsenal | other: @transactions, @help <command>"
@@ -499,6 +553,35 @@ async def test_mlb_live_team_includes_win_probability_and_active_pitchers() -> N
         "(3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit)"
     ]
     assert ITALIC in replies[0]
+
+
+@pytest.mark.asyncio
+async def test_preview_alias_returns_game_context() -> None:
+    client = FakeClient(games=[_live_game()])
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@matchup TOR")
+
+    assert _plain(replies) == [
+        "Preview TOR @ BAL | State: Top 3, 1 out | Score: TOR 1, BAL 2 | "
+        "Weather: Sunny, 82F, wind 3 mph, L To R | "
+        "Lineups: TOR posted, BAL pending | "
+        "Form: TOR 31-26 L10 6-4 W1; BAL 28-30 L10 4-6 L2"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_highlights_accepts_game_id() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    replies = await router.handle_message("@highlights game 824832")
+
+    assert _plain(replies) == [
+        "Highlights TOR @ BAL: Vladimir Guerrero Jr.'s go-ahead homer 00:00:42 "
+        "https://www.mlb.com/video/vlad-go-ahead-homer; Blue Jays turn two 00:00:28 "
+        "https://www.mlb.com/video/jays-turn-two"
+    ]
 
 
 @pytest.mark.asyncio
@@ -665,6 +748,7 @@ async def test_gamelog_and_splits_commands() -> None:
 
     gamelog = await router.handle_message("@gamelog Shohei Ohtani 2")
     splits = await router.handle_message("@splits Shohei Ohtani risp")
+    night_split = await router.handle_message("@splits Shohei Ohtani night")
 
     assert _plain(gamelog) == [
         "Shohei Ohtani last 2 games hitting: "
@@ -672,6 +756,10 @@ async def test_gamelog_and_splits_commands() -> None:
     ]
     assert _plain(splits) == [
         "Shohei Ohtani 2026 Scoring Position hitting: "
+        ".333/.444/.667 OPS 1.111, 12 RBI"
+    ]
+    assert _plain(night_split) == [
+        "Shohei Ohtani 2026 Night Games hitting: "
         ".333/.444/.667 OPS 1.111, 12 RBI"
     ]
 

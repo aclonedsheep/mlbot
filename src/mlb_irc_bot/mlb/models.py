@@ -64,6 +64,14 @@ class GameDetail:
 
 
 @dataclass(frozen=True)
+class GameHighlight:
+    title: str
+    url: str
+    blurb: str | None = None
+    duration: str | None = None
+
+
+@dataclass(frozen=True)
 class PitcherInfo:
     player_id: int | None
     full_name: str

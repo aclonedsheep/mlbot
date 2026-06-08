@@ -7,6 +7,7 @@ import httpx
 from mlb_irc_bot.mlb.hydrate import SCHEDULE_HYDRATE, schedule_params
 from mlb_irc_bot.mlb.models import (
     GameDetail,
+    GameHighlight,
     GameLogEntry,
     GameSummary,
     JsonDict,
@@ -134,17 +135,54 @@ TEAM_RANKINGS: dict[str, tuple[str, str, str, str]] = {
 
 SITUATION_ALIASES: dict[str, tuple[str, str]] = {
     "a": ("a", "Away"),
+    "ahead": ("sah", "Ahead"),
     "away": ("a", "Away"),
+    "b1": ("b1", "Batting First"),
+    "b2": ("b2", "Batting Second"),
+    "b3": ("b3", "Batting Third"),
+    "b4": ("b4", "Batting Fourth"),
+    "b5": ("b5", "Batting Fifth"),
+    "b6": ("b6", "Batting Sixth"),
+    "b7": ("b7", "Batting Seventh"),
+    "b8": ("b8", "Batting Eighth"),
+    "b9": ("b9", "Batting Ninth"),
     "basesloaded": ("r123", "Bases Loaded"),
+    "behind": ("sbh", "Behind"),
+    "day": ("d", "Day Games"),
+    "daygames": ("d", "Day Games"),
+    "dh": ("pD", "Designated Hitter"),
+    "firsthalf": ("h1", "First Half"),
+    "grass": ("g", "Grass"),
     "loaded": ("r123", "Bases Loaded"),
     "home": ("h", "Home"),
+    "interleague": ("int", "Interleague"),
     "late": ("lc", "Late / Close"),
     "lateclose": ("lc", "Late / Close"),
+    "lefthandedstarter": ("vls", "vs Left Handed Starter"),
+    "night": ("n", "Night Games"),
+    "nightgames": ("n", "Night Games"),
+    "postas": ("posas", "Post All-Star"),
+    "postallstar": ("posas", "Post All-Star"),
+    "preas": ("preas", "Pre All-Star"),
+    "preallstar": ("preas", "Pre All-Star"),
+    "reliever": ("rp", "Reliever"),
+    "righthandedstarter": ("vrs", "vs Right Handed Starter"),
     "risp": ("risp", "Scoring Position"),
+    "secondhalf": ("h2", "Second Half"),
+    "sp": ("sp", "Starter"),
+    "starter": ("sp", "Starter"),
+    "tied": ("sti", "Tied"),
+    "turf": ("t", "Turf"),
+    "val": ("val", "vs AL"),
     "vl": ("vl", "vs Left"),
     "vlhp": ("vl", "vs Left"),
+    "vnl": ("vnl", "vs NL"),
     "vr": ("vr", "vs Right"),
     "vrhp": ("vr", "vs Right"),
+    "vsal": ("val", "vs AL"),
+    "vsleftstarter": ("vls", "vs Left Handed Starter"),
+    "vsnl": ("vnl", "vs NL"),
+    "vsrightstarter": ("vrs", "vs Right Handed Starter"),
 }
 
 SAVANT_BASE_URL = "https://baseballsavant.mlb.com"
@@ -770,6 +808,10 @@ class MLBStatsClient:
             reverse=True,
         )
 
+    async def get_game_highlights(self, game_pk: int, *, limit: int = 3) -> list[GameHighlight]:
+        payload = await self._get(f"/v1/game/{game_pk}/content")
+        return _parse_game_highlights(payload)[:limit]
+
     async def available_schedule_hydrations(self, target_date: date) -> list[str]:
         payload = await self._get(
             "/v1/schedule",
@@ -1096,6 +1138,52 @@ def team_ranking_config(category: str) -> tuple[str, str, str, str]:
 def situation_code(value: str) -> tuple[str, str] | None:
     compact = value.strip().replace("-", "").replace("_", "").lower()
     return SITUATION_ALIASES.get(compact)
+
+
+def _parse_game_highlights(payload: JsonDict) -> list[GameHighlight]:
+    highlights = payload.get("highlights") or {}
+    items: list[JsonDict] = []
+    for bucket_name in (
+        "live",
+        "highlights",
+        "scoreboard",
+        "scoreboardPreview",
+        "gameCenter",
+        "milestone",
+    ):
+        bucket = highlights.get(bucket_name) or {}
+        items.extend(bucket.get("items") or [])
+
+    parsed: list[GameHighlight] = []
+    seen_urls: set[str] = set()
+    for item in items:
+        title = str(item.get("headline") or item.get("title") or item.get("blurb") or "").strip()
+        if not title:
+            continue
+        url = _highlight_url(item)
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        parsed.append(
+            GameHighlight(
+                title=title,
+                url=url,
+                blurb=item.get("blurb"),
+                duration=item.get("duration"),
+            )
+        )
+    return parsed
+
+
+def _highlight_url(item: JsonDict) -> str:
+    slug = str(item.get("slug") or item.get("id") or "").strip("/")
+    if slug:
+        return f"https://www.mlb.com/video/{slug}"
+    for playback in item.get("playbacks") or ():
+        url = str(playback.get("url") or "")
+        if url.startswith("http"):
+            return url
+    return ""
 
 
 def _raw_game_pk(raw: JsonDict) -> int | None:

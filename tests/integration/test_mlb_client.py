@@ -116,6 +116,55 @@ async def test_game_detail_uses_v11_live_feed() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_game_highlights_parse_mlb_video_slugs() -> None:
+    route = respx.get("https://statsapi.mlb.com/api/v1/game/123/content").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "highlights": {
+                    "highlights": {
+                        "items": [
+                            {
+                                "headline": "Big swing ties the game",
+                                "slug": "big-swing-ties-the-game",
+                                "duration": "00:00:39",
+                                "playbacks": [
+                                    {
+                                        "name": "mp4Avc",
+                                        "url": "https://clips.example/video.mp4",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                    "live": {
+                        "items": [
+                            {
+                                "title": "Walk-off single",
+                                "id": "walk-off-single",
+                                "duration": "00:00:28",
+                            }
+                        ]
+                    },
+                }
+            },
+        )
+    )
+
+    async with MLBStatsClient() as client:
+        highlights = await client.get_game_highlights(123)
+
+    assert route.called
+    assert [highlight.title for highlight in highlights] == [
+        "Walk-off single",
+        "Big swing ties the game",
+    ]
+    assert highlights[0].url == "https://www.mlb.com/video/walk-off-single"
+    assert highlights[1].duration == "00:00:39"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_enrich_home_run_data_matches_savant_play_id() -> None:
     route = respx.get("https://baseballsavant.mlb.com/leaderboard/home-runs").mock(
         return_value=httpx.Response(

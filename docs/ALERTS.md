@@ -14,6 +14,7 @@ score alerts keep their natural formats.
   other-park count when those fields are available.
 - Scoring plays and run-scoring state changes.
 - Home run scoring plays are posted as home run alerts only, not duplicate scoring alerts.
+- Tied games, go-ahead or lead-change scoring plays, and walk-offs.
 - Bases-loaded situations, including score, inning, outs, and current batter
   when the live feed exposes them.
 - Large win-probability swings from the game win-probability endpoint.
@@ -49,6 +50,7 @@ New context alerts can be disabled independently with:
 - `MLB_ENABLE_ALERT_BARREL`
 - `MLB_ENABLE_ALERT_LATE_THREAT`
 - `MLB_ENABLE_ALERT_WEATHER`
+- `MLB_ENABLE_ALERT_LEAD_CHANGES`
 
 Thresholds:
 

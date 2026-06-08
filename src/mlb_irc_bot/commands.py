@@ -23,7 +23,9 @@ from mlb_irc_bot.mlb.formatters import (
     format_defense,
     format_game_detail,
     format_game_log,
+    format_game_preview,
     format_game_summary,
+    format_highlights,
     format_leaders,
     format_lineup,
     format_pitch_arsenal,
@@ -94,6 +96,8 @@ class CommandRouter:
         try:
             if command == "mlb":
                 return await self._mlb(args)
+            if command in {"preview", "matchup"}:
+                return await self._preview(args)
             if command == "box":
                 return await self._box(args)
             if command == "wp":
@@ -134,6 +138,8 @@ class CommandRouter:
                 return await self._arsenal(args)
             if command == "transactions":
                 return await self._transactions(args)
+            if command == "highlights":
+                return await self._highlights(args)
             if command == "help":
                 return self._help(args)
         except MLBAPIError as exc:
@@ -202,6 +208,32 @@ class CommandRouter:
     async def _schedule_for_date(self, target_date: date) -> list[str]:
         games = await self.client.get_schedule(target_date)
         return format_compact_schedule(games, target_date, self.settings.zoneinfo())
+
+    async def _preview(self, args: list[str]) -> list[str]:
+        if args and args[0].lower() == "game" and len(args) >= 2 and args[1].isdigit():
+            detail = await self.client.get_game_detail(int(args[1]))
+            game = detail.summary
+        else:
+            game, message = await self._game_for_team_on_date(args, "preview")
+            if game is None:
+                return [message]
+            detail = await self._try_game_detail(game.game_pk)
+        lineup_statuses = []
+        if detail is not None:
+            for team in (detail.summary.away, detail.summary.home):
+                lineup = lineup_for_team(detail, team.id) if team.id is not None else None
+                posted = lineup is not None and bool(lineup.entries)
+                lineup_statuses.append((team.abbreviation, posted))
+        standings = await self._try_regular_standings()
+        return [
+            format_game_preview(
+                game,
+                self.settings.zoneinfo(),
+                detail=detail,
+                lineup_statuses=lineup_statuses,
+                standings=standings,
+            )
+        ]
 
     async def _box(self, args: list[str]) -> list[str]:
         if not args:
@@ -551,6 +583,13 @@ class CommandRouter:
         title = _transaction_title(team, start_date, end_date)
         return [format_transactions(transactions, title=title)]
 
+    async def _highlights(self, args: list[str]) -> list[str]:
+        game, message = await self._detail_game_from_args(args, "highlights", allow_upcoming=True)
+        if game is None:
+            return [message]
+        highlights = await self.client.get_game_highlights(game.game_pk, limit=3)
+        return [format_highlights(game, highlights)]
+
     def _help(self, args: list[str]) -> list[str]:
         prefix = self.settings.command_prefix
         topic = args[0].lower() if args else ""
@@ -565,6 +604,16 @@ class CommandRouter:
             return [
                 f"{irc.bold(f'{prefix}box')} TEAM [today|yesterday] or "
                 f"{irc.bold(f'{prefix}box game')} GAMEPK"
+            ]
+        if topic in {"preview", "matchup"}:
+            return [
+                f"{irc.bold(f'{prefix}preview')} TEAM [today|tomorrow|yesterday] or "
+                f"{irc.bold(f'{prefix}matchup')} TEAM [today|tomorrow|yesterday]"
+            ]
+        if topic == "highlights":
+            return [
+                f"{irc.bold(f'{prefix}highlights')} TEAM [today|yesterday] or "
+                f"{irc.bold(f'{prefix}highlights game')} GAMEPK"
             ]
         if topic in {"wp", "stars", "weather", "replay"}:
             return [
@@ -625,8 +674,9 @@ class CommandRouter:
             f"{irc.title('Commands')}: "
             f"{irc.section('games')}: {irc.bold(f'{prefix}mlb')}, "
             f"{irc.bold(f'{prefix}mlb *')}, {irc.bold(f'{prefix}mlb TEAM')}, "
-            f"{irc.bold(f'{prefix}box')}, {irc.bold(f'{prefix}wp')}, "
-            f"{irc.bold(f'{prefix}stars')}, {irc.bold(f'{prefix}weather')}, "
+            f"{irc.bold(f'{prefix}preview')}, {irc.bold(f'{prefix}box')}, "
+            f"{irc.bold(f'{prefix}wp')}, {irc.bold(f'{prefix}stars')}, "
+            f"{irc.bold(f'{prefix}weather')}, {irc.bold(f'{prefix}highlights')}, "
             f"{irc.bold(f'{prefix}replay')}, {irc.bold(f'{prefix}mlbpitcher')}, "
             f"{irc.bold(f'{prefix}mlbpitchers')}, {irc.bold(f'{prefix}mlblineup')} | "
             f"{irc.section('standings')}: {irc.bold(f'{prefix}standings')}, "
@@ -969,6 +1019,22 @@ class CommandRouter:
         if game is None:
             return None, message
         return await self.client.get_game_detail(game.game_pk), ""
+
+    async def _try_game_detail(self, game_pk: int) -> GameDetail | None:
+        try:
+            return await self.client.get_game_detail(game_pk)
+        except (AttributeError, MLBAPIError):
+            return None
+
+    async def _try_regular_standings(self):
+        try:
+            return await self.client.get_standings(
+                season=self.now().year,
+                standings_type="regularSeason",
+                league=None,
+            )
+        except (AttributeError, MLBAPIError):
+            return []
 
     async def _try_win_probability(self, game_pk: int):
         try:

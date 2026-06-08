@@ -16,6 +16,7 @@ def collect_alerts(
 ) -> list[Alert]:
     alerts: list[Alert] = []
     alerts.extend(_scoring_alerts(feed))
+    alerts.extend(_scoring_state_alerts(feed))
     alerts.extend(_home_run_alerts(feed))
     alerts.extend(_win_probability_alerts(feed, win_probability_threshold))
     alerts.extend(_high_leverage_alerts(feed, high_leverage_threshold))
@@ -80,6 +81,108 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
             )
         )
     return alerts
+
+
+def _scoring_state_alerts(feed: JsonDict) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    plays = _all_plays(feed)
+    scoring_indices = set(_plays(feed).get("scoringPlays") or [])
+    alerts: list[Alert] = []
+    previous_away = 0
+    previous_home = 0
+    for index, play in enumerate(plays):
+        result = play.get("result") or {}
+        away_score = _first_int(result.get("awayScore"), result.get("away_score"))
+        home_score = _first_int(result.get("homeScore"), result.get("home_score"))
+        if away_score is None or home_score is None:
+            continue
+        score_changed = away_score != previous_away or home_score != previous_home
+        if index in scoring_indices or score_changed:
+            alerts.extend(
+                _scoring_state_alerts_for_play(
+                    feed,
+                    game_pk,
+                    play,
+                    index,
+                    previous_away=previous_away,
+                    previous_home=previous_home,
+                    away_score=away_score,
+                    home_score=home_score,
+                )
+            )
+        previous_away = away_score
+        previous_home = home_score
+    return alerts
+
+
+def _scoring_state_alerts_for_play(
+    feed: JsonDict,
+    game_pk: int | None,
+    play: JsonDict,
+    index: int,
+    *,
+    previous_away: int,
+    previous_home: int,
+    away_score: int,
+    home_score: int,
+) -> list[Alert]:
+    previous_leader = _leader_side(previous_away, previous_home)
+    current_leader = _leader_side(away_score, home_score)
+    if previous_leader == current_leader:
+        return []
+    if previous_leader is None and previous_away == 0 and previous_home == 0:
+        return []
+
+    about = play.get("about") or {}
+    at_bat = about.get("atBatIndex", index)
+    description = _play_description(play)
+    context = _play_score_context(feed, play, away_score, home_score)
+    if _is_walkoff_play(feed, play, previous_away, previous_home, away_score, home_score):
+        return [
+            Alert(
+                key=f"{game_pk}:walkoff:{at_bat}",
+                alert_type="walkoff",
+                game_pk=game_pk,
+                message=(
+                    f"{_alert_label('Walk-off', irc.IRCColor.GREEN)}: "
+                    f"{irc.team(_team_abbreviation(feed, 'home'), home=True)} wins "
+                    f"on {description}{context}"
+                ),
+            )
+        ]
+
+    if current_leader is None and previous_leader is not None:
+        scoring_side = _scoring_side(previous_away, previous_home, away_score, home_score)
+        team = _team_abbreviation(feed, scoring_side or "away")
+        return [
+            Alert(
+                key=f"{game_pk}:tie_game:{at_bat}",
+                alert_type="tie_game",
+                game_pk=game_pk,
+                message=(
+                    f"{_alert_label('Tie game', irc.IRCColor.YELLOW)}: "
+                    f"{irc.team(team, home=scoring_side == 'home')} ties it "
+                    f"on {description}{context}"
+                ),
+            )
+        ]
+
+    if current_leader is not None:
+        team = _team_abbreviation(feed, current_leader)
+        label = "Lead change" if previous_leader is not None else "Go-ahead"
+        return [
+            Alert(
+                key=f"{game_pk}:lead_change:{at_bat}",
+                alert_type="lead_change",
+                game_pk=game_pk,
+                message=(
+                    f"{_alert_label(label, irc.IRCColor.RED)}: "
+                    f"{irc.team(team, home=current_leader == 'home')} takes the lead "
+                    f"on {description}{context}"
+                ),
+            )
+        ]
+    return []
 
 
 def _home_run_alert(
@@ -593,6 +696,85 @@ def _inning_text(half: str, inning: Any) -> str:
 
 def _play_inning_text(about: JsonDict) -> str:
     return _inning_text(str(about.get("halfInning") or "").title(), about.get("inning"))
+
+
+def _leader_side(away_score: int, home_score: int) -> str | None:
+    if away_score > home_score:
+        return "away"
+    if home_score > away_score:
+        return "home"
+    return None
+
+
+def _scoring_side(
+    previous_away: int,
+    previous_home: int,
+    away_score: int,
+    home_score: int,
+) -> str | None:
+    away_delta = away_score - previous_away
+    home_delta = home_score - previous_home
+    if away_delta > home_delta:
+        return "away"
+    if home_delta > away_delta:
+        return "home"
+    return None
+
+
+def _play_description(play: JsonDict) -> str:
+    result = play.get("result") or {}
+    return result.get("description") or result.get("event") or "the scoring play"
+
+
+def _play_score_context(
+    feed: JsonDict,
+    play: JsonDict,
+    away_score: int,
+    home_score: int,
+) -> str:
+    about = play.get("about") or {}
+    score_text = _score_value_text(feed, away_score, home_score)
+    inning_text = _play_inning_text(about)
+    parts = [part for part in (score_text, inning_text) if part]
+    return " | " + " | ".join(parts) if parts else ""
+
+
+def _score_value_text(feed: JsonDict, away_score: int, home_score: int) -> str:
+    away_team = _team_abbreviation(feed, "away")
+    home_team = _team_abbreviation(feed, "home")
+    return (
+        f"{irc.team(away_team)} {irc.value(away_score)}, "
+        f"{irc.team(home_team, home=True)} {irc.value(home_score)}"
+    )
+
+
+def _is_walkoff_play(
+    feed: JsonDict,
+    play: JsonDict,
+    previous_away: int,
+    previous_home: int,
+    away_score: int,
+    home_score: int,
+) -> bool:
+    about = play.get("about") or {}
+    half = str(about.get("halfInning") or "").lower()
+    inning = _first_int(about.get("inning")) or 0
+    return (
+        _is_final_feed(feed)
+        and half == "bottom"
+        and inning >= 9
+        and previous_home <= previous_away
+        and home_score > away_score
+    )
+
+
+def _is_final_feed(feed: JsonDict) -> bool:
+    status = (_game_data(feed).get("status") or {})
+    values = {
+        str(status.get("abstractGameState") or "").lower(),
+        str(status.get("detailedState") or "").lower(),
+    }
+    return bool(values & {"final", "game over", "completed early"})
 
 
 def _score_text(feed: JsonDict, linescore: JsonDict) -> str:

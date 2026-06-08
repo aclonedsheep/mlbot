@@ -93,8 +93,6 @@ checkout did not contain the backlog file.
 - Gap: no live games were active during the sweep, so no naturally firing alert
   could be visually judged.
 
-## Current
-
 ### TASK-067 - Bound Leaders Output
 
 - Status: Done.
@@ -106,10 +104,31 @@ checkout did not contain the backlog file.
 - Verification: `pytest` passes with 50 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
 
+## Current
+
+### TASK-068 - Preview Highlights Splits And Scoring Alerts
+
+- Status: Done.
+- Goal: implement the approved feature batch for compact game previews,
+  highlight links, expanded split aliases, and scoring-state alerts.
+- Result: added `@preview` and `@matchup` for compact game previews with
+  probables, weather, lineup status, and team form when available; added
+  `@highlights TEAM` and `@highlights game GAMEPK` backed by game-content
+  highlight metadata; expanded player/team split aliases such as day/night,
+  grass/turf, score state, starter/reliever, league-opponent, and batting-order
+  splits; added tied-game, go-ahead/lead-change, and walk-off alerts behind
+  `MLB_ENABLE_ALERT_LEAD_CHANGES`.
+- Verification: `pytest` passes with 54 tests; `ruff check .` passes;
+  `python -m mlb_irc_bot --dry-run` passes.
+
 ## Next Candidates
 
+- Deploy TASK-068 to the VPS if you want the new commands and scoring-state
+  alerts live in `#mlbtest`.
 - Watch a naturally firing live alert in `#mlbtest` once games are active and
   make only narrow formatting tweaks if the alert context feels noisy in-channel.
+- Run a live `@preview`, `@highlights`, and expanded-split command sweep after
+  deployment to judge IRC readability.
 - Consider whether `@teamleaders` should also get omitted-count formatting if a
   future category returns unusually long player names.
 - Add a Docker Compose config check to CI or another environment where Docker is

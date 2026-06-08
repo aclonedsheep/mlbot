@@ -14,6 +14,7 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Game fallback data: `/api/v1/game/{gamePk}/linescore`, `/boxscore`, `/playByPlay`
 - Game context metrics: `/api/v1/game/{gamePk}/contextMetrics` for live win probability.
 - Game win-probability history: `/api/v1/game/{gamePk}/winProbability` for current game win probability, largest swings, and high-leverage play context.
+- Game content: `/api/v1/game/{gamePk}/content` for MLB video highlight metadata and slugs.
 - Boxscore top performers: `/api/v1/game/{gamePk}/boxscore` and live-feed `liveData.boxscore.topPerformers`.
 - Weather/replay/game info: live-feed `gameData.weather`, `gameData.review`, and `gameData.gameInfo`.
 - Team stats: `/api/v1/teams/{teamId}/stats` with `season`, `group`, `stats`, and optional date range.
@@ -42,7 +43,9 @@ values:
 
 The `/api/v1/{type}` metadata endpoint exposes useful catalogs. Live probes on
 2026-06-06 confirmed `statTypes`, `statGroups`, `leagueLeaderTypes`, `metrics`,
-`situationCodes`, and `rosterTypes`. The new split commands use the public
+`situationCodes`, and `rosterTypes`; a 2026-06-08 check confirmed additional
+split codes such as day/night, grass/turf, score state, starter/reliever, league
+opponent, and batting-order splits. The split commands use the public
 `situationCodes` catalog; advanced leaders use `/api/v1/stats` rather than
 `/api/v1/stats/leaders` when categories such as wRC+, WAR, FIP, xFIP, or xwOBA
 are not available through the league-leader endpoint.

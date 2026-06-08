@@ -1,5 +1,28 @@
 # Project Memory
 
+## 2026-06-08 - TASK-068: Preview Highlights Splits And Scoring Alerts
+
+- Goal: implement the approved feature batch: compact `@preview`/`@matchup` game previews, `@highlights` game media links, expanded split aliases, and lead-change/tie-game/walk-off alerts.
+- Starting point: local `main` is clean and ahead of `origin/main` by the TASK-066 and TASK-067 handoff commits; current commands already cover schedules, game detail, boxscores, win probability, stars, weather/replay, player/team stats, transactions, and leaders.
+- Planned changes: add MLB client models/parsers and IRC formatters for game previews and game content highlights; add command routing/help/docs for `@preview`, `@matchup`, and `@highlights`; expand `situation_code` aliases used by player and team splits; add scoring-state alert detectors for ties, lead changes, and walk-offs with config toggles; add focused unit coverage and run pytest, ruff, and dry-run.
+- Changes: added `@preview`/`@matchup` game previews with probables, weather,
+  lineup status, and team form where available; added `@highlights TEAM` and
+  `@highlights game GAMEPK` from `/api/v1/game/{gamePk}/content`; expanded
+  split aliases for day/night, grass/turf, score state, starter/reliever,
+  league-opponent, and batting-order contexts; added tied-game, go-ahead or
+  lead-change, and walk-off alerts behind `MLB_ENABLE_ALERT_LEAD_CHANGES`.
+- Verification: `.\.venv\Scripts\python -m pytest -q -o
+  cache_dir=.tmp\task068-pytest-cache
+  --basetemp=.tmp\task068-pytest-basetemp` passes with 54 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Commit: pending.
+- Resume prompt: Continue after TASK-068; preview/highlight commands, expanded
+  split aliases, and scoring-state alerts are implemented and locally verified.
+  Next useful step is deployment to the VPS if the new commands/alerts should
+  go live, followed by a compact `#mlbtest` sweep of `@preview`, `@highlights`,
+  expanded split aliases, and any naturally firing scoring-state alert.
+
 ## 2026-06-08 - TASK-067: Bound Leaders Output
 
 - Goal: reproduce and fix `@leaders` output truncation and prevent spammy high

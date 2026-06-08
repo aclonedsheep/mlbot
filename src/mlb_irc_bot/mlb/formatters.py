@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from mlb_irc_bot import irc_format as irc
 from mlb_irc_bot.mlb.models import (
     GameDetail,
+    GameHighlight,
     GameLogEntry,
     GameSummary,
     Leader,
@@ -124,6 +125,55 @@ def format_game_detail(
     return [_truncate(line)]
 
 
+def format_game_preview(
+    game: GameSummary,
+    tz: ZoneInfo,
+    *,
+    detail: GameDetail | None = None,
+    lineup_statuses: list[tuple[str, bool]] | None = None,
+    standings: list[StandingTeam] | None = None,
+) -> str:
+    bits = [
+        (
+            f"{irc.title('Preview')} {_team_abbr(game.away, home=False)} @ "
+            f"{_team_abbr(game.home, home=True)}"
+        )
+    ]
+    if game.is_live:
+        bits.append(f"{irc.section('State')}: {format_linescore(game)}")
+        bits.append(f"{irc.section('Score')}: {score(game)}")
+    elif game.is_final:
+        bits.append(f"{irc.section('Final')}: {score(game)}")
+    else:
+        bits.append(f"{irc.section('First pitch')}: {irc.value(_preview_time(game, tz))}")
+    if game.venue:
+        bits.append(f"{irc.section('Venue')}: {game.venue}")
+    probables = _preview_probables(game)
+    if probables:
+        bits.append(f"{irc.section('Probables')}: {probables}")
+    weather = _preview_weather(detail)
+    if weather:
+        bits.append(f"{irc.section('Weather')}: {weather}")
+    lineups = _preview_lineups(lineup_statuses or [])
+    if lineups:
+        bits.append(f"{irc.section('Lineups')}: {lineups}")
+    form = _preview_form(game, standings or [])
+    if form:
+        bits.append(f"{irc.section('Form')}: {form}")
+    return _truncate(" | ".join(bits))
+
+
+def format_highlights(game: GameSummary, highlights: list[GameHighlight]) -> str:
+    title = f"Highlights {_team_abbr(game.away, home=False)} @ {_team_abbr(game.home, home=True)}"
+    if not highlights:
+        return f"{irc.title(title)}: {irc.muted('none found.')}"
+    bits = []
+    for highlight in highlights:
+        duration = f" {irc.muted(highlight.duration)}" if highlight.duration else ""
+        bits.append(f"{irc.bold(highlight.title)}{duration} {highlight.url}")
+    return _join_with_omitted_count(f"{irc.title(title)}: ", bits)
+
+
 def format_linescore(game: GameSummary) -> str:
     linescore = game.linescore
     if not linescore:
@@ -154,6 +204,62 @@ def score(game: GameSummary) -> str:
 
 def _team_abbr(team: TeamInfo, *, home: bool) -> str:
     return irc.team(team.abbreviation, home=home)
+
+
+def _preview_time(game: GameSummary, tz: ZoneInfo) -> str:
+    if game.game_date is None:
+        return "TBD"
+    local = game.game_date.astimezone(tz)
+    return f"{local.strftime('%I').lstrip('0') or '0'}:{local.strftime('%M %p %Z')}"
+
+
+def _preview_probables(game: GameSummary) -> str:
+    if not game.away_probable_pitcher and not game.home_probable_pitcher:
+        return ""
+    away = game.away_probable_pitcher or "TBD"
+    home = game.home_probable_pitcher or "TBD"
+    return (
+        f"{_team_abbr(game.away, home=False)} {irc.bold(away)}; "
+        f"{_team_abbr(game.home, home=True)} {irc.bold(home)}"
+    )
+
+
+def _preview_weather(detail: GameDetail | None) -> str:
+    if detail is None:
+        return ""
+    weather = ((detail.raw.get("gameData") or {}).get("weather") or {})
+    bits = []
+    if weather.get("condition"):
+        bits.append(str(weather.get("condition")))
+    if weather.get("temp"):
+        bits.append(f"{weather.get('temp')}F")
+    if weather.get("wind"):
+        bits.append(f"wind {weather.get('wind')}")
+    return ", ".join(bits)
+
+
+def _preview_lineups(lineup_statuses: list[tuple[str, bool]]) -> str:
+    if not lineup_statuses:
+        return ""
+    return ", ".join(
+        f"{irc.team(abbreviation)} {'posted' if posted else 'pending'}"
+        for abbreviation, posted in lineup_statuses
+    )
+
+
+def _preview_form(game: GameSummary, standings: list[StandingTeam]) -> str:
+    by_id = {record.team_id: record for record in standings if record.team_id is not None}
+    bits = []
+    for team in (game.away, game.home):
+        record = by_id.get(team.id)
+        if record is None:
+            continue
+        bits.append(
+            f"{irc.team(team.abbreviation)} {irc.value(f'{record.wins}-{record.losses}')} "
+            f"L10 {irc.value(record.last_ten or '-')} "
+            f"{irc.value(record.streak or '-')}"
+        )
+    return "; ".join(bits)
 
 
 def format_standings(
