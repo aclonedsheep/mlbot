@@ -29,7 +29,12 @@
   `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
 - Deployment: not deployed yet; next step is live `#mlbtest` preview and VPS
   deploy if the formatting looks good in-channel.
-- Commit: pending.
+- Commit: `8f4d9ef154eccce6e295071f9c8bfb6c31df3e3c`.
+- Resume prompt: Continue after TASK-065; local alert-context and calmer
+  formatting changes are committed but not deployed. Preview `@help`, `@mlb *`,
+  `@mlb TEAM`, `@box TEAM`, one stat-heavy command, and any naturally firing
+  alert in `#mlbtest`; if the formatting looks good, deploy with the existing
+  `.\scripts\deploy.ps1` workflow and record the deployment result.
 
 ## 2026-06-08 - TASK-064: Restore Live Announcement Scheduler
 
