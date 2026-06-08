@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from time import monotonic
@@ -13,6 +14,7 @@ from mlb_irc_bot.storage import AlertStore
 SendAlert = Callable[[str], Awaitable[None]]
 NEAR_START_LOOKAHEAD = timedelta(hours=2)
 NEAR_START_GRACE = timedelta(hours=3)
+LOGGER = logging.getLogger(__name__)
 
 
 class LiveScheduler:
@@ -31,10 +33,17 @@ class LiveScheduler:
         self._cached_games: list[GameSummary] = []
         self._last_schedule_refresh = 0.0
         self._last_near_start_poll: dict[int, float] = {}
+        self._observed_game_pks: set[int] = set()
+        self._suppressed_alert_keys: set[str] = set()
 
     async def run_forever(self) -> None:
         while True:
-            await self.poll_once()
+            try:
+                await self.poll_once()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception("Live scheduler poll failed")
             await asyncio.sleep(self.settings.active_game_poll_seconds)
 
     async def poll_once(self) -> None:
@@ -69,11 +78,39 @@ class LiveScheduler:
                 )
             except MLBAPIError:
                 pass
+            except Exception:
+                LOGGER.exception(
+                    "Live scheduler failed to collect alerts for game %s",
+                    game.game_pk,
+                )
+                continue
             final_alert = final_alert_from_summary(game)
             if final_alert is not None:
                 alerts.append(final_alert)
+            if self._should_suppress_existing_alerts(game):
+                suppressed_keys = {alert.key for alert in alerts}
+                self._suppressed_alert_keys.update(suppressed_keys)
+                if suppressed_keys:
+                    LOGGER.info(
+                        "Live scheduler suppressed %s existing alerts for game %s on first poll",
+                        len(suppressed_keys),
+                        game.game_pk,
+                    )
+                continue
             for alert in alerts:
-                await self._send_once(alert)
+                if alert.key in self._suppressed_alert_keys:
+                    continue
+                try:
+                    await self._send_once(alert)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception(
+                        "Live scheduler failed to send alert key=%s type=%s game_pk=%s",
+                        alert.key,
+                        alert.alert_type,
+                        alert.game_pk,
+                    )
 
     def _should_poll_game(
         self,
@@ -122,6 +159,12 @@ class LiveScheduler:
             "late_threat": self.settings.enable_alert_late_threat,
             "weather": self.settings.enable_alert_weather,
         }.get(alert_type, True)
+
+    def _should_suppress_existing_alerts(self, game: GameSummary) -> bool:
+        if game.game_pk in self._observed_game_pks:
+            return False
+        self._observed_game_pks.add(game.game_pk)
+        return game.is_live or game.is_final
 
 
 def _is_near_start_game(game: GameSummary, now: datetime) -> bool:

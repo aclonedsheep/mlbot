@@ -1,5 +1,15 @@
 # Project Memory
 
+## 2026-06-08 - TASK-064: Restore Live Announcement Scheduler
+
+- Goal: troubleshoot and restore IRC announcements after `mlbotslop` stayed online but stopped posting live channel alerts.
+- Starting point: local `main` is ahead of `origin/main` by four release-workflow commits; VPS checkout is on `56753e2` with the container up for 24 hours, commands answering in `#mlbtest`, and the alert store showing no new rows after `2026-06-07T01:11Z`.
+- Live check: joined Libera `#mlbtest` as `AIAnnounceCheck`; `mlbotslop` was present and answered private `@mlb *` checks, but no channel announcements appeared during a 150-second wait while SF@CHC was live.
+- Finding: a direct in-container scheduler probe found fresh unseen alerts for the active game and many final games, while the SQLite alert store had no rows newer than the prior deploy window. The IRC command loop was alive, so the background scheduler had likely died or stalled silently.
+- Changes: supervised `LiveScheduler.run_forever()` so poll failures are logged and retried, kept per-game alert collection failures from stopping the whole poll, kept one failed IRC send from terminating remaining alert delivery, and baselined already-live/final games on first scheduler poll to avoid stale alert floods after a restart.
+- Local verification: `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task064-pytest-cache --basetemp=.tmp\task064-pytest-basetemp` passes with 47 tests; `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Deployment: pending.
+
 ## 2026-06-07 - TASK-063: Release Workflow Validation
 
 - Goal: run the restored release-readiness workflow locally and document any deployment dry-run limitations or gaps.

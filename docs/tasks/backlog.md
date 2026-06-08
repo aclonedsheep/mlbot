@@ -24,8 +24,6 @@ checkout did not contain the backlog file.
 - Verification: `pytest` passes with 44 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
 
-## Current
-
 ### TASK-063 - Validate Release Workflow
 
 - Status: Done.
@@ -39,6 +37,25 @@ checkout did not contain the backlog file.
   pushing or connecting.
 - Gap: `docker compose config` is still blocked on this machine because
   `docker` is not installed on PATH.
+
+## Current
+
+### TASK-064 - Restore Live Announcement Scheduler
+
+- Status: Ready for deploy.
+- Goal: restore live IRC announcements after the bot remained connected and
+  command-responsive but stopped posting channel alerts.
+- Finding: direct VPS/container checks showed `mlbotslop` answering commands in
+  `#mlbtest`, but a scheduler probe found fresh unseen alerts while the SQLite
+  alert store had no rows after the previous deploy window.
+- Result: the live scheduler now logs and survives poll failures, skips only a
+  broken game's alert collection, and does not let one failed IRC send terminate
+  the scheduler task. Scheduler restarts also baseline already-live/final games
+  so old plays are not dumped into the channel as backfill.
+- Verification: `pytest` passes with 47 tests; `ruff check .` passes;
+  `python -m mlb_irc_bot --dry-run` passes.
+- Pending: VPS deploy health check and focused `#mlbtest` confirmation that
+  channel alerts resume.
 
 ## Next Candidates
 

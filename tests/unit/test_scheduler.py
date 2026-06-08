@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -67,18 +68,102 @@ async def test_scheduler_throttles_near_start_detail_polls() -> None:
     assert client.detail_calls == [game.game_pk]
 
 
+@pytest.mark.asyncio
+async def test_scheduler_run_forever_survives_poll_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    game = _game_summary()
+    scheduler = LiveScheduler(
+        client=FakeClient(game),
+        store=FakeStore(),
+        settings=settings(),
+        send_alert=_capture([]),
+    )
+    poll_calls = 0
+
+    async def fake_poll_once() -> None:
+        nonlocal poll_calls
+        poll_calls += 1
+        if poll_calls == 1:
+            raise RuntimeError("temporary scheduler failure")
+        raise asyncio.CancelledError()
+
+    async def fake_sleep(_seconds: float) -> None:
+        return None
+
+    scheduler.poll_once = fake_poll_once  # type: ignore[method-assign]
+    monkeypatch.setattr("mlb_irc_bot.scheduler.asyncio.sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await scheduler.run_forever()
+
+    assert poll_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_scheduler_send_failure_does_not_stop_remaining_alerts() -> None:
+    first_game = _game_summary(game_pk=123)
+    second_game = _game_summary(game_pk=456)
+    client = FakeClient(first_game, second_game)
+    store = FakeStore()
+    send_attempts = 0
+
+    async def send_alert(_message: str) -> None:
+        nonlocal send_attempts
+        send_attempts += 1
+        if send_attempts == 1:
+            raise RuntimeError("temporary IRC send failure")
+
+    scheduler = LiveScheduler(
+        client=client,
+        store=store,
+        settings=settings(),
+        send_alert=send_alert,
+    )
+
+    await scheduler.poll_once()
+
+    assert client.detail_calls == [123, 456]
+    assert send_attempts == 2
+    assert store.sent_keys == ["456:game_info"]
+
+
+@pytest.mark.asyncio
+async def test_scheduler_suppresses_existing_alerts_for_live_game_on_first_poll() -> None:
+    game = _game_summary(
+        status="In Progress",
+        abstract_state="Live",
+        detailed_state="In Progress",
+    )
+    client = FakeClient(game)
+    store = FakeStore()
+    sent_messages: list[str] = []
+    scheduler = LiveScheduler(
+        client=client,
+        store=store,
+        settings=settings(),
+        send_alert=_capture(sent_messages),
+    )
+
+    await scheduler.poll_once()
+    await scheduler.poll_once()
+
+    assert client.detail_calls == [123, 123]
+    assert sent_messages == []
+    assert store.sent_keys == []
+
+
 class FakeClient:
-    def __init__(self, game: GameSummary) -> None:
-        self.game = game
+    def __init__(self, *games: GameSummary) -> None:
+        self.games = list(games)
         self.detail_calls: list[int] = []
 
     async def get_schedule(self, _target_date):
-        return [self.game]
+        return self.games
 
     async def get_game_detail(self, game_pk: int) -> GameDetail:
         self.detail_calls.append(game_pk)
+        game = next(game for game in self.games if game.game_pk == game_pk)
         return GameDetail(
-            summary=self.game,
+            summary=game,
             raw={
                 "gamePk": game_pk,
                 "gameData": {
@@ -150,15 +235,21 @@ def settings() -> SimpleNamespace:
     )
 
 
-def _game_summary(game_date: datetime | None = None) -> GameSummary:
+def _game_summary(
+    game_date: datetime | None = None,
+    game_pk: int = 123,
+    status: str = "Preview",
+    abstract_state: str = "Preview",
+    detailed_state: str = "Scheduled",
+) -> GameSummary:
     game_date = game_date or datetime.now(UTC) + timedelta(minutes=30)
     return GameSummary(
-        game_pk=123,
+        game_pk=game_pk,
         game_date=game_date,
         official_date=game_date.date(),
-        status="Preview",
-        abstract_state="Preview",
-        detailed_state="Scheduled",
+        status=status,
+        abstract_state=abstract_state,
+        detailed_state=detailed_state,
         away=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
         home=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
     )
