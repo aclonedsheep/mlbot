@@ -7,7 +7,7 @@
 - Changes: documented the process-scoped PowerShell execution-policy bypass for deployment scripts, added the no-push/no-SSH deployment dry-run command, and updated the backlog with TASK-063 results and next candidates.
 - Verification: Python 3.12.13 venv confirmed; `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task063-pytest-cache --basetemp=.tmp\task063-pytest-basetemp` passes with 44 tests and known dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -DryRun -AllowDirty -SkipPush` prints the intended SSH deploy command without pushing or connecting.
 - Gap: `docker compose config` could not run because `docker` is not installed on PATH.
-- Commit: pending.
+- Commit: `59114069f24863ce2cea6863182144c6285edbe7`.
 
 ## 2026-06-07 - TASK-062: Release Workflow Cleanup
 
