@@ -22,7 +22,14 @@
   --basetemp=.tmp\task067-pytest-basetemp` passes with 50 tests and known
   dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
   passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
-- Commit: pending.
+- Commit: `3fb84be078f77fbf771568a05e844bb3eaa0123f`.
+- Resume prompt: Continue after TASK-067; `@leaders` limit clamping and
+  whole-entry omitted-count formatting are covered by tests and passing local
+  checks. The local branch is ahead of `origin/main` by the TASK-066 handoff
+  commits plus TASK-067; deploy only if you want the leader-output fix live on
+  the VPS. Next useful candidates are a naturally firing alert preview during
+  live games or adding a Docker Compose config check in an environment with
+  Docker.
 
 ## 2026-06-08 - TASK-066: Preview Deployed Formatting
 
