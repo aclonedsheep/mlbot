@@ -72,12 +72,12 @@ Examples:
 - `@gamelog <player name> [hitting|pitching] [N]`: recent game log lines.
 - `@splits <player name> <risp|vl|vr|home|away|lateclose|basesloaded> [hitting|pitching] [season]`: situational player splits.
 - `@teamstats TEAM [hitting|pitching] [season] [7 days|14 days|30 days] [risp|vl|vr|home|away|lateclose|basesloaded]`: team hitting and/or pitching stats, including situation splits.
-- `@teamrank <stat> [hitting|pitching] [limit]`: team rankings for stats such as OPS, HR, ERA, WHIP, runs, and strikeouts.
-- `@teamleaders TEAM [category] [limit]`: team leaders for one category, or a compact default set.
+- `@teamrank <stat> [hitting|pitching] [limit]`: team rankings for stats such as OPS, HR, ERA, WHIP, runs, and strikeouts. Limit is capped at 10.
+- `@teamleaders TEAM [category] [limit]`: team leaders for one category, or a compact default set. Limit is capped at 5.
 - `@defense <player name> [season]`: defense stats such as Outs Above Average and fielding runs prevented when available.
 - `@arsenal <player name> [season]`: pitch mix, usage, average velocity, and counts.
 - `@transactions [TEAM] [today|yesterday|7 days|YYYY-MM-DD]`: recent MLB or team transactions.
-- `@leaders <category> [limit]`: stat leaders. Common aliases include `hr`, `rbi`, `ops`, `obp`, `slg`, `whip`, `k/9`, `k/bb`, `wRC+`, `WAR`, `FIP`, `xFIP`, and `xwOBA`.
+- `@leaders <category> [limit]`: stat leaders. Common aliases include `hr`, `rbi`, `ops`, `obp`, `slg`, `whip`, `k/9`, `k/bb`, `wRC+`, `WAR`, `FIP`, `xFIP`, and `xwOBA`. Limit is capped at 10.
 
 Examples:
 

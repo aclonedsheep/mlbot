@@ -236,7 +236,7 @@ def format_leaders(category: str, leaders: list[Leader]) -> str:
         + (f" ({irc.muted(leader.team_name)})" if leader.team_name else "")
         for leader in leaders
     ]
-    return _truncate(f"{irc.title(category)} leaders: " + "; ".join(bits))
+    return _join_with_omitted_count(f"{irc.title(category)} leaders: ", bits)
 
 
 def format_boxscore(
@@ -1092,6 +1092,24 @@ def _short_group_name(value: str) -> str:
 
 def _truncate(value: str) -> str:
     return irc.truncate_irc(value, MAX_IRC_LEN)
+
+
+def _join_with_omitted_count(prefix: str, bits: list[str], separator: str = "; ") -> str:
+    best = ""
+    included: list[str] = []
+    for index, bit in enumerate(bits):
+        remaining = len(bits) - index - 1
+        candidate_bits = [*included, bit]
+        candidate = prefix + separator.join(candidate_bits)
+        if remaining:
+            candidate += separator + irc.muted(f"+{remaining} more")
+        if len(irc.strip_irc_formatting(candidate)) > MAX_IRC_LEN:
+            break
+        included.append(bit)
+        best = candidate
+    if best:
+        return best
+    return _truncate(prefix + bits[0])
 
 
 def _truncate_piece(value: str, limit: int) -> str:

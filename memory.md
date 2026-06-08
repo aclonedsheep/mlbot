@@ -1,5 +1,29 @@
 # Project Memory
 
+## 2026-06-08 - TASK-067: Bound Leaders Output
+
+- Goal: reproduce and fix `@leaders` output truncation and prevent spammy high
+  limits such as `@leaders HR 300`.
+- Starting point: local `main` is ahead of `origin/main` by the two TASK-066
+  formatting-preview handoff commits; `@leaders` already clamps integer limits
+  internally, but that behavior is under-tested and all returned leaders are
+  still formatted into one IRC message.
+- Planned changes: add tests for leader-limit clamping and overlong leader
+  formatting, cap user-requested leader limits to an IRC-safe maximum, make
+  leader formatting reserve room for a concise omitted-count suffix instead of
+  blind truncation, update command docs/backlog/memory, then run pytest, ruff,
+  and dry-run.
+- Changes: named the `@leaders`, `@teamrank`, and `@teamleaders` limit caps;
+  kept `@leaders` capped at 10; changed league leader formatting to include
+  whole entries only and append `+N more` when long names/teams would exceed
+  the IRC message budget; documented the caps.
+- Verification: `.\.venv\Scripts\python -m pytest -q -o
+  cache_dir=.tmp\task067-pytest-cache
+  --basetemp=.tmp\task067-pytest-basetemp` passes with 50 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Commit: pending.
+
 ## 2026-06-08 - TASK-066: Preview Deployed Formatting
 
 - Goal: preview the deployed TASK-065 IRC formatting in real `#mlbtest` and

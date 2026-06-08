@@ -78,8 +78,6 @@ checkout did not contain the backlog file.
   post-deploy probe showed the container running with `restarts=0` and the
   remote checkout clean at `62519428bdbab99d240b326ac10af809a7db31bc`.
 
-## Current
-
 ### TASK-066 - Preview Deployed Formatting
 
 - Status: Done.
@@ -95,9 +93,24 @@ checkout did not contain the backlog file.
 - Gap: no live games were active during the sweep, so no naturally firing alert
   could be visually judged.
 
+## Current
+
+### TASK-067 - Bound Leaders Output
+
+- Status: Done.
+- Goal: keep `@leaders` output readable and prevent high requested limits from
+  producing spammy API calls or overlong IRC replies.
+- Result: `@leaders` keeps its limit capped at 10, the command docs now call
+  out leaderboard caps, and long league-leader replies fit whole entries with a
+  concise `+N more` suffix instead of blind truncation.
+- Verification: `pytest` passes with 50 tests; `ruff check .` passes;
+  `python -m mlb_irc_bot --dry-run` passes.
+
 ## Next Candidates
 
 - Watch a naturally firing live alert in `#mlbtest` once games are active and
   make only narrow formatting tweaks if the alert context feels noisy in-channel.
+- Consider whether `@teamleaders` should also get omitted-count formatting if a
+  future category returns unusually long player names.
 - Add a Docker Compose config check to CI or another environment where Docker is
   available.

@@ -51,6 +51,9 @@ STAT_WINDOW_WORDS = {"day", "days"}
 GAME_WINDOW_WORDS = {"game", "games"}
 MAX_STAT_WINDOW_DAYS = 60
 MAX_LAST_GAMES = 30
+MAX_LEADERS_LIMIT = 10
+MAX_TEAM_LEADERS_LIMIT = 5
+MAX_TEAM_RANKINGS_LIMIT = 10
 DEFAULT_TEAM_LEADER_CATEGORIES = [
     "homeRuns",
     "runsBattedIn",
@@ -413,7 +416,7 @@ class CommandRouter:
         category = normalize_leader_category(args[0])
         limit = 5
         if len(args) > 1 and args[1].isdigit():
-            limit = max(1, min(int(args[1]), 10))
+            limit = max(1, min(int(args[1]), MAX_LEADERS_LIMIT))
         leaders = await self.client.get_leaders(category, season=self.now().year, limit=limit)
         return [format_leaders(category, leaders)]
 
@@ -464,7 +467,7 @@ class CommandRouter:
             if lowered in {"hitting", "pitching"}:
                 group = lowered
             elif token.isdigit():
-                limit = max(1, min(int(token), 10))
+                limit = max(1, min(int(token), MAX_TEAM_RANKINGS_LIMIT))
             else:
                 raise ValueError("teamrank accepts <stat> [hitting|pitching] [limit].")
         rankings = await self.client.get_team_rankings(
@@ -490,7 +493,7 @@ class CommandRouter:
         remaining = args[1:]
         limit = 3
         if remaining and remaining[-1].isdigit():
-            limit = max(1, min(int(remaining.pop()), 5))
+            limit = max(1, min(int(remaining.pop()), MAX_TEAM_LEADERS_LIMIT))
         categories = (
             [normalize_leader_category(remaining[0])]
             if remaining

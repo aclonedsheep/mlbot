@@ -6,6 +6,7 @@ import pytest
 
 from mlb_irc_bot.commands import CommandRouter
 from mlb_irc_bot.irc_format import BOLD, COLOR, ITALIC, strip_irc_formatting
+from mlb_irc_bot.mlb.formatters import MAX_IRC_LEN, format_leaders
 from mlb_irc_bot.mlb.models import (
     GameDetail,
     GameLogEntry,
@@ -709,6 +710,37 @@ async def test_leaders_normalizes_category_alias() -> None:
 
     assert client.leader_calls == [("homeRuns", 2026, 3)]
     assert _plain(replies) == ["homeRuns leaders: 1. Slugger 20 (Club)"]
+
+
+@pytest.mark.asyncio
+async def test_leaders_clamps_large_requested_limit() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    await router.handle_message("@leaders HR 300")
+
+    assert client.leader_calls == [("homeRuns", 2026, 10)]
+
+
+def test_format_leaders_omits_whole_entries_when_output_is_long() -> None:
+    leaders = [
+        Leader(
+            rank=str(index),
+            value=str(40 - index),
+            player_name=f"Very Long Slugger Name Number {index}",
+            team_name="Extremely Long Baseball Club",
+        )
+        for index in range(1, 11)
+    ]
+
+    reply = format_leaders("homeRuns", leaders)
+    plain = strip_irc_formatting(reply)
+
+    assert len(plain) <= MAX_IRC_LEN
+    assert "+5 more" in plain
+    assert "Very Long Slugger Name Number 5" in plain
+    assert "Very Long Slugger Name Number 6" not in plain
+    assert not plain.endswith("...")
 
 
 @pytest.mark.asyncio
