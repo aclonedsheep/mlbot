@@ -123,7 +123,7 @@ checkout did not contain the backlog file.
 
 ### TASK-069 - Complete Help Coverage And Deploy
 
-- Status: Local checks passed; deployment pending.
+- Status: Done.
 - Goal: make `@help` cover every command and subcommand/alias, then deploy the
   current branch to the VPS.
 - Result: added command-specific help for `@preview`/`@matchup`,
@@ -133,6 +133,14 @@ checkout did not contain the backlog file.
   docs and README.
 - Verification: `pytest` passes with 55 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
+- Deployment: pushed and deployed `a7350e8` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`. A
+  post-deploy probe showed the remote checkout clean at
+  `a7350e895fd0ff93ea27954a95cab7d74c39b21f` with the Compose service up.
+- Live check: joined Libera `#mlbtest` as `AIHelpCheck543` and confirmed
+  `slopstats` answered `@help`, `@help preview`, `@help highlights`,
+  `@help wildcard`, and `@help help` with the updated deployed help text.
 
 ## Next Candidates
 

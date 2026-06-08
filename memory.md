@@ -23,14 +23,22 @@
   dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
   passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff
   --check` passes.
-- Commit: pending.
-- Deployment: pending.
-- Resume prompt: Continue after TASK-069 local verification; `@help` now has
-  topic coverage for every routed command and alias, including `@preview game
-  GAMEPK`, and the standard local checks passed. Next step is deploying the
-  branch with `powershell.exe -ExecutionPolicy Bypass -File
-  .\scripts\deploy.ps1`, then recording the deployed commit and running a
-  compact `#mlbtest` sweep when practical.
+- Commit: `a7350e895fd0ff93ea27954a95cab7d74c39b21f`.
+- Deployment: pushed and deployed `a7350e8` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  remote checkout fast-forwarded from `75ba89a` to
+  `a7350e895fd0ff93ea27954a95cab7d74c39b21f`, the `mlb-irc-bot` Compose
+  service rebuilt/recreated successfully, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Live check: joined Libera `#mlbtest` as `AIHelpCheck543` and confirmed
+  `slopstats` answered `@help`, `@help preview`, `@help highlights`,
+  `@help wildcard`, and `@help help` with the updated deployed help text,
+  including `@preview game GAMEPK` and the command/alias topic message.
+- Resume prompt: Continue after TASK-069; help coverage is complete, committed
+  at `a7350e895fd0ff93ea27954a95cab7d74c39b21f`, deployed on the VPS, and live
+  `#mlbtest` help probes pass. Next useful step is a compact live sweep of
+  `@preview`, `@highlights`, expanded split aliases, and any naturally firing
+  scoring-state alert during active games.
 
 ## 2026-06-08 - TASK-068: Preview Highlights Splits And Scoring Alerts
 
