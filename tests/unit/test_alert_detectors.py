@@ -123,19 +123,20 @@ def test_collect_alerts_detects_live_events() -> None:
     } <= alert_types
     assert (
         strip_irc_formatting(alerts_by_type["home_run"].message)
-        == "HR: Mookie Betts homers. | EV 105.5 mph, LA 28 deg, Dist 412 ft, "
-        "Other parks 23/29"
+        == "HR: Mookie Betts homers. | LAD 4, NYY 0 | Top 6, 1 out | "
+        "EV 105.5 mph, LA 28 deg, Dist 412 ft, Other parks 23/29"
     )
     assert (
         strip_irc_formatting(alerts_by_type["scoring"].message)
-        == "Scoring play: Freddie Freeman singles. Will Smith scores."
+        == "Scoring play: Freddie Freeman singles. Will Smith scores. | "
+        "LAD 4, NYY 0 | Top 6, 1 out"
     )
     assert alerts_by_type["home_run"].key == "999:hr:10"
     assert alerts_by_type["scoring"].key == "999:score:11"
     assert (
         strip_irc_formatting(alerts_by_type["bases_loaded"].message)
-        == "Bases loaded: Los Angeles Dodgers batting, Top 6, LAD 4, NYY 0, "
-        "1 out, Shohei Ohtani up."
+        == "Bases loaded: LAD 4, NYY 0 | Top 6, 1 out | "
+        "Los Angeles Dodgers batting, Shohei Ohtani up."
     )
     assert BOLD in alerts_by_type["home_run"].message
     assert COLOR in alerts_by_type["home_run"].message
@@ -238,10 +239,12 @@ def test_collect_alerts_detects_new_contextual_alerts() -> None:
         "High leverage: LI 3.2 Bottom 8, Clutch Hitter - Clutch Hitter doubles."
     )
     assert by_type["hard_hit"].startswith(
-        "Hard hit: Bo Bichette doubles. | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+        "Hard hit: Bo Bichette doubles. | TOR 3, BAL 4 | Top 8, 2 outs | "
+        "EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
     assert by_type["barrel"].startswith(
-        "Barrel: Bo Bichette doubles. | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+        "Barrel: Bo Bichette doubles. | TOR 3, BAL 4 | Top 8, 2 outs | "
+        "EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
     assert by_type["late_threat"].startswith(
         "Late threat: Toronto Blue Jays has the tying run at the plate"

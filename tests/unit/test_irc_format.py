@@ -7,6 +7,12 @@ def test_style_helpers_emit_standard_irc_codes() -> None:
     assert fmt.color("MLB", fmt.IRCColor.LIGHT_BLUE) == "\x0312MLB\x0f"
 
 
+def test_stat_value_keeps_routine_values_plain() -> None:
+    assert fmt.stat_value("42") == "42"
+    assert fmt.BOLD not in fmt.stat_value("42")
+    assert fmt.COLOR not in fmt.stat_value("42")
+
+
 def test_strip_irc_formatting_restores_plaintext() -> None:
     styled = (
         f"{fmt.title('MLB')} {fmt.team('TOR')} "

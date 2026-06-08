@@ -38,8 +38,6 @@ checkout did not contain the backlog file.
 - Gap: `docker compose config` is still blocked on this machine because
   `docker` is not installed on PATH.
 
-## Current
-
 ### TASK-064 - Restore Live Announcement Scheduler
 
 - Status: Done.
@@ -61,10 +59,29 @@ checkout did not contain the backlog file.
   windows because the live feed still had only the same alert keys that were
   baselined at scheduler startup.
 
+## Current
+
+### TASK-065 - Add Alert Game Context And Calmer Formatting
+
+- Status: Done.
+- Goal: make live announcements more informative by appending quick game
+  updates where the live feed exposes score, inning, and outs, then reduce
+  formatting noise in dense command replies.
+- Result: HR, scoring, win-probability, high-leverage, hard-hit/barrel,
+  bases-loaded, no-hit, cycle, and immaculate-inning alerts now include a
+  compact game update when available. Live `@mlb TEAM`, `@box`, `@help`, game
+  logs, top performers, pitcher summaries, and stat-heavy replies use clearer
+  section labels and calmer routine stat-value emphasis.
+- Verification: `pytest` passes with 48 tests; `ruff check .` passes;
+  `python -m mlb_irc_bot --dry-run` passes.
+- Deployment: not deployed yet; live IRC preview and deploy remain available
+  follow-ups.
+
 ## Next Candidates
 
-- Audit top-level `@help` output against `docs/COMMANDS.md` for newer commands.
+- Preview TASK-065 formatting in real `#mlbtest`, especially `@help`, `@mlb *`,
+  `@mlb TEAM`, `@box TEAM`, one stat-heavy command, and any live alert that
+  fires naturally.
+- Deploy TASK-065 to the VPS after preview approval.
 - Add a Docker Compose config check to CI or another environment where Docker is
   available.
-- Monitor the deployed scheduler logs during the next alert-worthy live play to
-  confirm the first post-baseline channel alert lands cleanly.

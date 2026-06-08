@@ -4,6 +4,10 @@ The bot is designed for one configured MLB channel and posts league-wide alerts 
 
 Alert types are enabled or disabled through environment variables, not IRC commands.
 
+Most live game-state alerts append a compact update when the MLB live feed
+exposes it: current score, inning, and outs. Pregame game-info alerts and final
+score alerts keep their natural formats.
+
 ## Alert Types
 
 - Home runs, including exit velocity, launch angle, and Baseball Savant

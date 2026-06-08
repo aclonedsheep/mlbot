@@ -620,18 +620,21 @@ class CommandRouter:
             ]
         return [
             f"{irc.title('Commands')}: "
-            f"{irc.bold(f'{prefix}mlb')}, {irc.bold(f'{prefix}mlb *')}, "
-            f"{irc.bold(f'{prefix}mlb TEAM')}, {irc.bold(f'{prefix}box')}, "
-            f"{irc.bold(f'{prefix}wp')}, {irc.bold(f'{prefix}stars')}, "
-            f"{irc.bold(f'{prefix}weather')}, {irc.bold(f'{prefix}replay')}, "
-            f"{irc.bold(f'{prefix}standings')}, {irc.bold(f'{prefix}wildcard')}, "
-            f"{irc.bold(f'{prefix}mlbpitcher')}, {irc.bold(f'{prefix}mlbpitchers')}, "
-            f"{irc.bold(f'{prefix}mlblineup')}, {irc.bold(f'{prefix}sstats')}, "
+            f"{irc.section('games')}: {irc.bold(f'{prefix}mlb')}, "
+            f"{irc.bold(f'{prefix}mlb *')}, {irc.bold(f'{prefix}mlb TEAM')}, "
+            f"{irc.bold(f'{prefix}box')}, {irc.bold(f'{prefix}wp')}, "
+            f"{irc.bold(f'{prefix}stars')}, {irc.bold(f'{prefix}weather')}, "
+            f"{irc.bold(f'{prefix}replay')}, {irc.bold(f'{prefix}mlbpitcher')}, "
+            f"{irc.bold(f'{prefix}mlbpitchers')}, {irc.bold(f'{prefix}mlblineup')} | "
+            f"{irc.section('standings')}: {irc.bold(f'{prefix}standings')}, "
+            f"{irc.bold(f'{prefix}wildcard')} | "
+            f"{irc.section('stats')}: {irc.bold(f'{prefix}sstats')}, "
             f"{irc.bold(f'{prefix}gamelog')}, {irc.bold(f'{prefix}splits')}, "
             f"{irc.bold(f'{prefix}teamstats')}, {irc.bold(f'{prefix}teamrank')}, "
-            f"{irc.bold(f'{prefix}teamleaders')}, {irc.bold(f'{prefix}defense')}, "
-            f"{irc.bold(f'{prefix}arsenal')}, {irc.bold(f'{prefix}transactions')}, "
-            f"{irc.bold(f'{prefix}leaders')}, {irc.bold(f'{prefix}help <command>')}"
+            f"{irc.bold(f'{prefix}teamleaders')}, {irc.bold(f'{prefix}leaders')}, "
+            f"{irc.bold(f'{prefix}defense')}, {irc.bold(f'{prefix}arsenal')} | "
+            f"{irc.section('other')}: {irc.bold(f'{prefix}transactions')}, "
+            f"{irc.bold(f'{prefix}help <command>')}"
         ]
 
     def _sstats_usage(self) -> str:

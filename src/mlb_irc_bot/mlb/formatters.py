@@ -101,17 +101,24 @@ def format_game_detail(
     active_pitchers: list[PitcherInfo] | None = None,
 ) -> list[str]:
     game = detail.summary
-    line = format_game_summary(game, tz)
+    if game.is_live:
+        matchup = f"{_team_abbr(game.away, home=False)} @ {_team_abbr(game.home, home=True)}"
+        line = (
+            f"{matchup} | {format_linescore(game)} | "
+            f"{irc.section('Score')}: {score(game)}"
+        )
+    else:
+        line = format_game_summary(game, tz)
     if win_probability_summary and win_probability_summary.current:
         win_text = _format_win_probability(win_probability_summary.current)
-        line += f" | {irc.section('Win')}: {win_text}"
+        line += f" | {irc.section('WP')}: {win_text}"
     elif win_probability:
-        line += f" | {irc.section('Win')}: {_format_win_probability(win_probability)}"
+        line += f" | {irc.section('WP')}: {_format_win_probability(win_probability)}"
     if win_probability_summary and win_probability_summary.biggest_swing:
         swing_text = _format_win_probability_swing(win_probability_summary)
         line += f" | {irc.section('Swing')}: {swing_text}"
     if active_pitchers:
-        line += f" | {irc.section('P')}: {_format_active_pitchers(active_pitchers)}"
+        line += f" | {irc.section('Pitching')}: {_format_active_pitchers(active_pitchers)}"
     if detail.last_play:
         line += f" | {irc.section('Last play')}: {detail.last_play}"
     return [_truncate(line)]
@@ -248,12 +255,19 @@ def format_boxscore(
         else (format_linescore(game) or irc.live(game.detailed_state))
     )
     bits = [
-        f"{irc.title('Box')} {_team_abbr(game.away, home=False)} {away_line}, "
-        f"{_team_abbr(game.home, home=True)} {home_line} {state}".strip()
+        (
+            f"{irc.title('Box')} {_team_abbr(game.away, home=False)} @ "
+            f"{_team_abbr(game.home, home=True)}"
+        ),
+        state,
+        (
+            f"{irc.section('R-H-E')}: {_team_abbr(game.away, home=False)} {away_line}, "
+            f"{_team_abbr(game.home, home=True)} {home_line}"
+        ),
     ]
     left_on_base = _left_on_base(detail)
     if left_on_base:
-        bits.append(f"{irc.section('LOB')} " + left_on_base)
+        bits.append(f"{irc.section('LOB')}: " + left_on_base)
     pitcher_bits = _box_pitcher_bits(pitcher_groups)
     if pitcher_bits:
         bits.append(f"{irc.section('Pitching')}: " + "; ".join(pitcher_bits))
@@ -576,7 +590,7 @@ def _format_win_probability_swing(summary: WinProbabilitySummary) -> str:
 def _format_active_pitchers(pitchers: list[PitcherInfo]) -> str:
     return "; ".join(
         f"{irc.team(pitcher.team.abbreviation)} {irc.bold(pitcher.full_name)} "
-        f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+        f"({_format_pitcher_game_stats(pitcher.game_stats, compact=True)})"
         for pitcher in pitchers
     )
 
@@ -592,7 +606,7 @@ def _format_top_performer(performer: TopPerformer) -> str:
         or _format_pitcher_game_stats(performer.pitching_stats, compact=True)
     )
     score = (
-        f" {irc.stat_label('GS')} {irc.value(performer.game_score)}"
+        f" {irc.stat_label('GS')} {irc.stat_value(performer.game_score)}"
         if performer.game_score is not None
         else ""
     )
@@ -641,7 +655,7 @@ def _box_pitcher_bits(groups: list[TeamPitchers]) -> list[str]:
         pitcher = group.pitchers[-1]
         bits.append(
             f"{irc.team(group.team.abbreviation)} {irc.bold(pitcher.full_name)} "
-            f"{_format_pitcher_game_stats(pitcher.game_stats, compact=True)}"
+            f"({_format_pitcher_game_stats(pitcher.game_stats, compact=True)})"
         )
     return bits
 
@@ -679,7 +693,7 @@ def _format_team_hitting_stats(stat: dict) -> str:
     if slash:
         ops = _first_value(stat, ("ops",))
         bits.append(
-            f"{slash} {irc.stat_label('OPS')} {irc.value(_display(ops))}"
+            f"{slash} {irc.stat_label('OPS')} {irc.stat_value(_display(ops))}"
             if ops is not None
             else slash
         )
@@ -853,7 +867,7 @@ def _format_hitting_stats(stat: dict) -> str:
     if slash:
         ops = _first_value(stat, ("ops",))
         bits.append(
-            f"{slash} {irc.stat_label('OPS')} {irc.value(_display(ops))}"
+            f"{slash} {irc.stat_label('OPS')} {irc.stat_value(_display(ops))}"
             if ops is not None
             else slash
         )
@@ -880,7 +894,7 @@ def _format_pitching_stats(stat: dict) -> str:
     wins = _first_value(stat, ("wins",))
     losses = _first_value(stat, ("losses",))
     if wins is not None and losses is not None:
-        bits.append(irc.value(f"{_display(wins)}-{_display(losses)}"))
+        bits.append(irc.stat_value(f"{_display(wins)}-{_display(losses)}"))
     bits.extend(
         _labeled_stats(
             stat,
@@ -905,12 +919,12 @@ def _format_batter_game_stats(stat: dict) -> str:
         return ""
     summary = stat.get("summary")
     if summary:
-        return str(summary)
+        return str(summary).replace(" | ", ", ")
     bits = []
     hits = _first_value(stat, ("hits",))
     at_bats = _first_value(stat, ("atBats",))
     if hits is not None and at_bats is not None:
-        bits.append(irc.value(f"{_display(hits)}-{_display(at_bats)}"))
+        bits.append(irc.stat_value(f"{_display(hits)}-{_display(at_bats)}"))
     bits.extend(
         _counting_stats(
             stat,
@@ -988,7 +1002,9 @@ def _slash_line(stat: dict, keys: tuple[str, str, str]) -> str:
     values = [_first_value(stat, (key,)) for key in keys]
     if not any(value is not None for value in values):
         return ""
-    return irc.value("/".join("-" if value is None else _display(value) for value in values))
+    return irc.stat_value(
+        "/".join("-" if value is None else _display(value) for value in values)
+    )
 
 
 def _counting_stats(stat: dict, pairs: tuple[tuple[str, str], ...]) -> list[str]:
@@ -996,7 +1012,7 @@ def _counting_stats(stat: dict, pairs: tuple[tuple[str, str], ...]) -> list[str]
     for key, label in pairs:
         value = _first_value(stat, (key,))
         if value is not None:
-            bits.append(f"{irc.value(_display(value))} {irc.stat_label(label)}")
+            bits.append(f"{irc.stat_value(_display(value))} {irc.stat_label(label)}")
     return bits
 
 
@@ -1007,7 +1023,9 @@ def _labeled_stats(stat: dict, pairs: tuple) -> list[str]:
             keys = (keys,)
         value = _first_value(stat, keys)
         if value is not None:
-            bits.append(f"{irc.stat_label(label)} {irc.value(_display_labeled(value, label))}")
+            bits.append(
+                f"{irc.stat_label(label)} {irc.stat_value(_display_labeled(value, label))}"
+            )
     return bits
 
 
@@ -1018,7 +1036,7 @@ def _value_labeled_stats(stat: dict, pairs: tuple) -> list[str]:
             keys = (keys,)
         value = _first_value(stat, keys)
         if value is not None:
-            bits.append(f"{irc.value(_display(value))} {irc.stat_label(label)}")
+            bits.append(f"{irc.stat_value(_display(value))} {irc.stat_label(label)}")
     return bits
 
 

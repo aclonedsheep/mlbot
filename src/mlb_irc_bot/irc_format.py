@@ -88,6 +88,10 @@ def value(text: object) -> str:
     return style(text, bold=True)
 
 
+def stat_value(text: object) -> str:
+    return str(text)
+
+
 def live(text: object) -> str:
     return style(text, fg=IRCColor.RED, bold=True)
 

@@ -1,5 +1,36 @@
 # Project Memory
 
+## 2026-06-08 - TASK-065: Add Alert Game Context And Calmer Formatting
+
+- Goal: make live announcements more informative at a glance by adding score,
+  inning, and outs context where the live feed exposes it, then apply a
+  conservative formatting cleanup so IRC messages are easier to scan.
+- Starting point: `main` is clean at `de3b85c`; TASK-064 restored scheduler
+  reliability and deployed stale-baseline suppression. User approved
+  implementing both the announcement-context change and a conservative
+  formatting pass after a read-only formatting audit.
+- Planned changes: add a reusable alert game-context helper in
+  `src/mlb_irc_bot/alerts/detectors.py`; attach it to play/contextual alerts
+  that currently lack score/inning/outs; keep game-info/final/bases-loaded
+  behavior coherent; tune central IRC styling and dense formatter output only
+  where the blast radius is controlled; update tests and docs.
+- Changes: added a reusable alert game-update helper that appends current score,
+  inning, and outs where the live feed exposes them; attached that context to
+  HR, scoring, win-probability, high-leverage, hard-hit/barrel, bases-loaded,
+  no-hit, cycle, and immaculate-inning alerts. Kept game-info and final alerts
+  in their natural formats.
+- Formatting: grouped top-level `@help`, made live `@mlb TEAM` and `@box`
+  replies use clearer section labels, parenthesized pitcher game summaries,
+  removed embedded `|` separators from batter stat summaries, and introduced
+  plain `irc.stat_value()` for routine stat-list values so bold is more
+  conservative without removing emphasis from scores and alert prefixes.
+- Local verification: `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task065-pytest-cache --basetemp=.tmp\task065-pytest-basetemp`
+  passes with 48 tests; `.\.venv\Scripts\python -m ruff check .` passes;
+  `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Deployment: not deployed yet; next step is live `#mlbtest` preview and VPS
+  deploy if the formatting looks good in-channel.
+- Commit: pending.
+
 ## 2026-06-08 - TASK-064: Restore Live Announcement Scheduler
 
 - Goal: troubleshoot and restore IRC announcements after `mlbotslop` stayed online but stopped posting live channel alerts.

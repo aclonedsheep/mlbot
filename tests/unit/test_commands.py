@@ -437,10 +437,11 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
     error_replies = await router.handle_message("@bogus")
 
     assert _plain(help_replies) == [
-        "Commands: @mlb, @mlb *, @mlb TEAM, @box, @wp, @stars, @weather, "
-        "@replay, @standings, @wildcard, @mlbpitcher, @mlbpitchers, "
-        "@mlblineup, @sstats, @gamelog, @splits, @teamstats, @teamrank, "
-        "@teamleaders, @defense, @arsenal, @transactions, @leaders, @help <command>"
+        "Commands: games: @mlb, @mlb *, @mlb TEAM, @box, @wp, @stars, "
+        "@weather, @replay, @mlbpitcher, @mlbpitchers, @mlblineup | "
+        "standings: @standings, @wildcard | stats: @sstats, @gamelog, "
+        "@splits, @teamstats, @teamrank, @teamleaders, @leaders, @defense, "
+        "@arsenal | other: @transactions, @help <command>"
     ]
     assert _plain(error_replies) == ["Unknown command: @bogus. Try @help."]
     assert BOLD in help_replies[0]
@@ -491,9 +492,10 @@ async def test_mlb_live_team_includes_win_probability_and_active_pitchers() -> N
     replies = await router.handle_message("@mlb TOR")
 
     assert _plain(replies) == [
-        "TOR @ BAL: TOR 1, BAL 2 Top 3, 1 out | Win: BAL 99%, TOR 0.9% | "
-        "P: TOR Spencer Miles 2.1 IP 3 H 1 R 1 ER 1 BB 4 K 46 pit; "
-        "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit"
+        "TOR @ BAL | Top 3, 1 out | Score: TOR 1, BAL 2 | "
+        "WP: BAL 99%, TOR 0.9% | Pitching: TOR Spencer Miles "
+        "(2.1 IP 3 H 1 R 1 ER 1 BB 4 K 46 pit); BAL Kyle Bradish "
+        "(3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit)"
     ]
     assert ITALIC in replies[0]
 
@@ -506,10 +508,11 @@ async def test_box_returns_compact_boxscore() -> None:
     replies = await router.handle_message("@box TOR")
 
     assert _plain(replies) == [
-        "Box TOR 1-4-0, BAL 2-5-1 Top 3, 1 out | LOB TOR 3, BAL 4 | "
-        "Pitching: TOR Reliever One 0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit; "
-        "BAL Kyle Bradish 3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit | "
-        "Stars: TOR Vladimir Guerrero Jr. GS 78 - 2-4 | HR, 3 RBI | "
+        "Box TOR @ BAL | Top 3, 1 out | R-H-E: TOR 1-4-0, BAL 2-5-1 | "
+        "LOB: TOR 3, BAL 4 | Pitching: TOR Reliever One "
+        "(0.2 IP 0 H 0 R 0 ER 0 BB 1 K 12 pit); BAL Kyle Bradish "
+        "(3.0 IP 2 H 1 R 1 ER 2 BB 5 K 58 pit) | "
+        "Stars: TOR Vladimir Guerrero Jr. GS 78 - 2-4, HR, 3 RBI | "
         "Swing: BAL +18.4% Bottom 8 - Clutch hit scores two."
     ]
 
@@ -529,7 +532,7 @@ async def test_wp_stars_weather_and_replay_commands() -> None:
         "Swing: BAL +18.4% Bottom 8 - Clutch hit scores two."
     ]
     assert _plain(stars) == [
-        "Stars TOR @ BAL: TOR Vladimir Guerrero Jr. GS 78 - 2-4 | HR, 3 RBI"
+        "Stars TOR @ BAL: TOR Vladimir Guerrero Jr. GS 78 - 2-4, HR, 3 RBI"
     ]
     assert _plain(weather) == ["Weather TOR @ BAL: Sunny, 82F, wind 3 mph, L To R"]
     assert _plain(replay) == ["Replay TOR @ BAL: TOR 1 left, 1 used; BAL 1 left, 0 used"]
@@ -664,7 +667,7 @@ async def test_gamelog_and_splits_commands() -> None:
 
     assert _plain(gamelog) == [
         "Shohei Ohtani last 2 games hitting: "
-        "05-31 @ BAL: 2-4 | HR, 3 RBI; 05-30 vs BAL: 1-3 | BB"
+        "05-31 @ BAL: 2-4, HR, 3 RBI; 05-30 vs BAL: 1-3, BB"
     ]
     assert _plain(splits) == [
         "Shohei Ohtani 2026 Scoring Position hitting: "

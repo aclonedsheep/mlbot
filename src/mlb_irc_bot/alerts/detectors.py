@@ -49,7 +49,7 @@ def _home_run_alerts(feed: JsonDict) -> list[Alert]:
     for index, play in enumerate(_all_plays(feed)):
         if index in scoring_indices or not _is_home_run_play(play):
             continue
-        alerts.append(_home_run_alert(game_pk, play, index))
+        alerts.append(_home_run_alert(feed, game_pk, play, index))
     return alerts
 
 
@@ -63,7 +63,7 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
             continue
         play = plays[index]
         if _is_home_run_play(play):
-            alerts.append(_home_run_alert(game_pk, play, index))
+            alerts.append(_home_run_alert(feed, game_pk, play, index))
             continue
         result = play.get("result") or {}
         description = result.get("description") or result.get("event") or "Run scored"
@@ -73,16 +73,22 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
                 key=key,
                 alert_type="scoring",
                 game_pk=game_pk,
-                message=f"{_alert_label('Scoring play', irc.IRCColor.RED)}: {description}",
+                message=(
+                    f"{_alert_label('Scoring play', irc.IRCColor.RED)}: "
+                    f"{description}{_game_update_suffix(feed)}"
+                ),
             )
         )
     return alerts
 
 
-def _home_run_alert(game_pk: int | None, play: JsonDict, index: int) -> Alert:
+def _home_run_alert(
+    feed: JsonDict, game_pk: int | None, play: JsonDict, index: int
+) -> Alert:
     result = play.get("result") or {}
     batter = _person_name(play.get("matchup", {}).get("batter"))
     description = result.get("description") or f"Home run by {batter}"
+    context = _game_update_suffix(feed)
     details = _home_run_details(play)
     detail_text = f" | {details}" if details else ""
     key = f"{game_pk}:hr:{play.get('about', {}).get('atBatIndex', index)}"
@@ -90,7 +96,10 @@ def _home_run_alert(game_pk: int | None, play: JsonDict, index: int) -> Alert:
         key=key,
         alert_type="home_run",
         game_pk=game_pk,
-        message=f"{_alert_label('HR', irc.IRCColor.ORANGE)}: {description}{detail_text}",
+        message=(
+            f"{_alert_label('HR', irc.IRCColor.ORANGE)}: "
+            f"{description}{context}{detail_text}"
+        ),
     )
 
 
@@ -111,6 +120,7 @@ def _win_probability_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
         about = play.get("about") or {}
         result = play.get("result") or {}
         description = result.get("description") or result.get("event") or "Win probability swing"
+        context = _game_update_suffix(feed)
         key = f"{game_pk}:wp_swing:{about.get('atBatIndex', index)}"
         alerts.append(
             Alert(
@@ -121,7 +131,7 @@ def _win_probability_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
                     f"{_alert_label('WP swing', irc.IRCColor.LIGHT_CYAN)}: "
                     f"{irc.team(team)} {irc.value('+' + _format_percent(abs(added)))} "
                     f"{_play_inning_text(about)}: "
-                    f"{description}"
+                    f"{description}{context}"
                 ),
             )
         )
@@ -139,6 +149,7 @@ def _high_leverage_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
         result = play.get("result") or {}
         batter = _person_name((play.get("matchup") or {}).get("batter")) or "Batter"
         description = result.get("description") or result.get("event") or "plate appearance"
+        context = _game_update_suffix(feed)
         key = f"{game_pk}:high_leverage:{about.get('atBatIndex', index)}"
         alerts.append(
             Alert(
@@ -149,7 +160,7 @@ def _high_leverage_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
                     f"{_alert_label('High leverage', irc.IRCColor.PURPLE)}: "
                     f"{irc.value(f'LI {_format_number(leverage)}')} "
                     f"{_play_inning_text(about)}, "
-                    f"{irc.bold(batter)} - {description}"
+                    f"{irc.bold(batter)} - {description}{context}"
                 ),
             )
         )
@@ -175,6 +186,7 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
         )
         result = play.get("result") or {}
         description = result.get("description") or result.get("event") or "Batted ball"
+        context = _game_update_suffix(feed)
         details = _batted_ball_details(exit_velocity, launch_angle, distance)
         if exit_velocity >= hard_hit_threshold:
             alerts.append(
@@ -184,7 +196,7 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
                     game_pk=game_pk,
                     message=(
                         f"{_alert_label('Hard hit', irc.IRCColor.ORANGE)}: "
-                        f"{description} | {details}"
+                        f"{description}{context} | {details}"
                     ),
                 )
             )
@@ -196,7 +208,7 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
                     game_pk=game_pk,
                     message=(
                         f"{_alert_label('Barrel', irc.IRCColor.YELLOW)}: "
-                        f"{description} | {details}"
+                        f"{description}{context} | {details}"
                     ),
                 )
             )
@@ -301,7 +313,7 @@ def _bases_loaded_alerts(feed: JsonDict) -> list[Alert]:
     inning = linescore.get("currentInning")
     half = linescore.get("inningHalf") or ""
     team = _person_name(offense.get("team")) or "Offense"
-    context = _bases_loaded_context(feed, linescore, offense, team, half, inning)
+    context = _bases_loaded_context(feed, linescore, offense, team)
     key = f"{game_pk}:bases_loaded:{inning}:{half}:{team}"
     return [
         Alert(
@@ -356,6 +368,7 @@ def _no_hit_alerts(feed: JsonDict) -> list[Alert]:
             continue
         pitching_abbr = _team_abbreviation(feed, pitching_side)
         batting_abbr = _team_abbreviation(feed, batting_side)
+        context = _game_update_suffix(feed, linescore)
         key = f"{game_pk}:no_hit:{pitching_side}:{inning}"
         alerts.append(
             Alert(
@@ -365,7 +378,7 @@ def _no_hit_alerts(feed: JsonDict) -> list[Alert]:
                 message=(
                     f"{_alert_label('No-hit bid', irc.IRCColor.RED)}: "
                     f"{irc.team(pitching_abbr)} has held {irc.team(batting_abbr, home=True)} "
-                    f"hitless through inning {irc.value(inning)}."
+                    f"hitless through inning {irc.value(inning)}{context}."
                 ),
             )
         )
@@ -385,6 +398,7 @@ def _cycle_alerts(feed: JsonDict) -> list[Alert]:
         }
         missing = [name for name, count in hit_counts.items() if count == 0]
         player_name = _person_name(player.get("person")) or player_id.replace("ID", "")
+        context = _game_update_suffix(feed)
         if not missing:
             alerts.append(
                 Alert(
@@ -394,7 +408,7 @@ def _cycle_alerts(feed: JsonDict) -> list[Alert]:
                     message=(
                         f"{_alert_label('Cycle completed', irc.IRCColor.GREEN)}: "
                         f"{irc.bold(player_name)} has singled, doubled, "
-                        "tripled, and homered."
+                        f"tripled, and homered{context}."
                     ),
                 )
             )
@@ -406,7 +420,7 @@ def _cycle_alerts(feed: JsonDict) -> list[Alert]:
                     game_pk=game_pk,
                     message=(
                         f"{_alert_label('Cycle watch', irc.IRCColor.PURPLE)}: "
-                        f"{irc.bold(player_name)} needs a {irc.value(missing[0])}."
+                        f"{irc.bold(player_name)} needs a {irc.value(missing[0])}{context}."
                     ),
                 )
             )
@@ -438,17 +452,19 @@ def _immaculate_alerts(feed: JsonDict) -> list[Alert]:
             continue
         pitcher_name = _person_name((plays[0].get("matchup") or {}).get("pitcher"))
         pitcher_name = pitcher_name or str(pitcher_id)
+        context = _game_update_suffix(feed)
         key = f"{game_pk}:immaculate:{pitcher_id}:{inning}:{half}"
         alerts.append(
             Alert(
                 key=key,
                 alert_type="immaculate",
                 game_pk=game_pk,
-                    message=(
-                        f"{_alert_label('Immaculate inning', irc.IRCColor.LIGHT_CYAN)}: "
-                        f"{irc.bold(pitcher_name)} struck out the side "
-                        f"on {irc.value(9)} pitches in the {irc.bold(f'{half} {inning}')}."
-                    ),
+                message=(
+                    f"{_alert_label('Immaculate inning', irc.IRCColor.LIGHT_CYAN)}: "
+                    f"{irc.bold(pitcher_name)} struck out the side "
+                    f"on {irc.value(9)} pitches in the {irc.bold(f'{half} {inning}')}"
+                    f"{context}."
+                ),
             )
         )
     return alerts
@@ -554,21 +570,17 @@ def _bases_loaded_context(
     linescore: JsonDict,
     offense: JsonDict,
     team: str,
-    half: str,
-    inning: Any,
 ) -> str:
-    parts = [f"{irc.bold(team)} batting"]
-    inning_text = _inning_text(half, inning)
-    if inning_text:
-        parts.append(irc.bold(inning_text))
-    score_text = _score_text(feed, linescore)
-    if score_text:
-        parts.append(score_text)
-    parts.append(irc.value(_outs_text(linescore.get("outs", 0))))
+    parts = []
+    update = _game_update_text(feed, linescore)
+    if update:
+        parts.append(update)
+    batting_parts = [f"{irc.bold(team)} batting"]
     batter = _current_batter(feed, offense)
     if batter:
-        parts.append(f"{irc.bold(batter)} up")
-    return ", ".join(parts)
+        batting_parts.append(f"{irc.bold(batter)} up")
+    parts.append(", ".join(batting_parts))
+    return " | ".join(parts)
 
 
 def _inning_text(half: str, inning: Any) -> str:
@@ -597,6 +609,37 @@ def _score_text(feed: JsonDict, linescore: JsonDict) -> str:
         f"{irc.team(away_team)} {irc.value(away_score)}, "
         f"{irc.team(home_team, home=True)} {irc.value(home_score)}"
     )
+
+
+def _game_update_suffix(feed: JsonDict, linescore: JsonDict | None = None) -> str:
+    update = _game_update_text(feed, linescore)
+    return f" | {update}" if update else ""
+
+
+def _game_update_text(feed: JsonDict, linescore: JsonDict | None = None) -> str:
+    linescore = linescore or _linescore(feed)
+    if not linescore:
+        return ""
+    parts = []
+    score_text = _score_text(feed, linescore)
+    if score_text:
+        parts.append(score_text)
+    state_text = _inning_outs_text(linescore)
+    if state_text:
+        parts.append(state_text)
+    return " | ".join(parts)
+
+
+def _inning_outs_text(linescore: JsonDict) -> str:
+    inning_text = _inning_text(
+        str(linescore.get("inningHalf") or ""),
+        linescore.get("currentInning"),
+    )
+    outs = linescore.get("outs")
+    outs_text = "" if outs is None else _outs_text(outs)
+    if inning_text and outs_text:
+        return f"{inning_text}, {outs_text}"
+    return inning_text or outs_text
 
 
 def _outs_text(value: Any) -> str:
