@@ -21,9 +21,10 @@ docker compose config
 
 Before every substantial git checkpoint:
 
-1. Update `memory.md` with the iteration, decisions, changed areas, and verification.
-2. Run the relevant tests/checks.
-3. Commit with a focused message.
+1. Update `memory.md` with the task id, decisions, changed areas, and verification.
+2. Update `docs/tasks/backlog.md` with the task status and next candidates.
+3. Run the relevant tests/checks.
+4. Commit with a focused `[TASK-###]` message.
 
 ## Deployment
 

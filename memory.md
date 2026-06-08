@@ -1,5 +1,13 @@
 # Project Memory
 
+## 2026-06-07 - TASK-062: Release Workflow Cleanup
+
+- Goal: restore the release-readiness task breadcrumbs expected by handoff prompts and remove local pytest scratch-directory noise from routine git checks.
+- Starting point: prompt says TASK-061 is complete and backlog ends at TASK-061, but this checkout lacks `CLAUDE.md`, `AGENTS.md`, and `docs/tasks/backlog.md`; local `main` and `origin/main` are `56753e2`, and requested base `b3a52a2` is not present after fetch.
+- Changes: added repo-facing agent instructions, recreated a lightweight task backlog with TASK-062 as the cleanup, updated checkpoint docs, and ignored `.tmp/`.
+- Verification: `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task062-pytest-cache --basetemp=.tmp\task062-pytest-basetemp` passes with 44 tests; `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Commit: pending.
+
 ## 2026-05-31 - Iteration 1: Initial Scaffold
 
 - Goal: implement a Dockerized Python async IRC bot for a single MLB channel.
