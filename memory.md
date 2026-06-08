@@ -27,13 +27,23 @@
   --check` passes. A live client probe for game `822807` classified 40
   highlights: condensed=1, scoring=19, homers=14, defense=2, pitching=7,
   recap=1, interviews=2, data=17, and uncategorized highlights=4.
-- Commit: pending.
-- Deployment: not requested.
-- Resume prompt: Continue after TASK-071 local verification; `@highlights`
-  supports filters such as condensed, scoring, homers, defense, pitching, recap,
-  interviews, and data, and `@more` pages through the previous highlights
-  result. Next step is committing with `[TASK-071]`; deploy only if the new IRC
-  command behavior should go live immediately.
+- Commit: `d6956eefda17a1f54998ba9f9f04392971b8ac25`.
+- Deployment: pushed and deployed `d6956ee` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  remote checkout fast-forwarded to `d6956eefda17a1f54998ba9f9f04392971b8ac25`,
+  the `mlb-irc-bot` Compose service rebuilt/recreated successfully, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`.
+- Live check: joined Libera `#mlbtest` as `AIMore200` and confirmed
+  `@highlights filters`, `@highlights scoring game 822807`, and `@more` worked
+  in-channel. The scoring filter returned MP4 links numbered `1/19` through
+  `3/19`, then `@more` returned the next MP4 page starting at `4/19`.
+- Resume prompt: Continue after TASK-071; `@highlights` supports filters such
+  as condensed, scoring, homers, defense, pitching, recap, interviews, and data;
+  `@more` pages through the previous highlights result; the feature is
+  committed at `d6956eefda17a1f54998ba9f9f04392971b8ac25`, deployed on the VPS,
+  and live `#mlbtest` probes pass. Next useful step is a compact live sweep of
+  `@preview`, expanded split aliases, and any naturally firing scoring-state
+  alert during active games.
 
 ## 2026-06-08 - TASK-070: Resolve Highlight Links To MP4
 

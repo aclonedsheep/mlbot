@@ -182,6 +182,15 @@ checkout did not contain the backlog file.
   diff --check` passes. A live client probe for game `822807` classified 40
   highlight items across condensed, scoring, homers, defense, pitching, recap,
   interviews, data clips, and uncategorized highlights.
+- Deployment: pushed and deployed `d6956ee` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`. A
+  post-deploy probe showed the remote checkout clean at
+  `d6956eefda17a1f54998ba9f9f04392971b8ac25` with the Compose service up.
+- Live check: joined Libera `#mlbtest` as `AIMore200` and confirmed
+  `@highlights filters`, `@highlights scoring game 822807`, and `@more` worked
+  in-channel. The scoring filter returned MP4 links numbered `1/19` through
+  `3/19`, then `@more` returned the next MP4 page starting at `4/19`.
 
 ## Next Candidates
 
