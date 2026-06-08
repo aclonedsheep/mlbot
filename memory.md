@@ -16,7 +16,7 @@
   --basetemp=.tmp\task068-pytest-basetemp` passes with 54 tests and known
   dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
   passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
-- Commit: pending.
+- Commit: `ff4e8985d9f34b0bc1a466d2048ff9a5b92eb29b`.
 - Resume prompt: Continue after TASK-068; preview/highlight commands, expanded
   split aliases, and scoring-state alerts are implemented and locally verified.
   Next useful step is deployment to the VPS if the new commands/alerts should
