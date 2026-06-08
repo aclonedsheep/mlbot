@@ -42,7 +42,7 @@ checkout did not contain the backlog file.
 
 ### TASK-064 - Restore Live Announcement Scheduler
 
-- Status: Ready for deploy.
+- Status: Done.
 - Goal: restore live IRC announcements after the bot remained connected and
   command-responsive but stopped posting channel alerts.
 - Finding: direct VPS/container checks showed `mlbotslop` answering commands in
@@ -53,13 +53,18 @@ checkout did not contain the backlog file.
   the scheduler task. Scheduler restarts also baseline already-live/final games
   so old plays are not dumped into the channel as backfill.
 - Verification: `pytest` passes with 47 tests; `ruff check .` passes;
-  `python -m mlb_irc_bot --dry-run` passes.
-- Pending: VPS deploy health check and focused `#mlbtest` confirmation that
-  channel alerts resume.
+  `python -m mlb_irc_bot --dry-run` passes; the VPS deploy script rebuilt and
+  restarted the container; the in-container dry-run passes.
+- Live check: after deploy, scheduler logs showed stale first-poll suppression
+  for final games and the live SF@CHC game, and `mlbotslop` answered private
+  `@mlb *` checks in `#mlbtest`. No new channel alert appeared during the watch
+  windows because the live feed still had only the same alert keys that were
+  baselined at scheduler startup.
 
 ## Next Candidates
 
 - Audit top-level `@help` output against `docs/COMMANDS.md` for newer commands.
 - Add a Docker Compose config check to CI or another environment where Docker is
   available.
-- Push and deploy the accumulated `main` release commits when ready.
+- Monitor the deployed scheduler logs during the next alert-worthy live play to
+  confirm the first post-baseline channel alert lands cleanly.

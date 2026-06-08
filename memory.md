@@ -8,7 +8,10 @@
 - Finding: a direct in-container scheduler probe found fresh unseen alerts for the active game and many final games, while the SQLite alert store had no rows newer than the prior deploy window. The IRC command loop was alive, so the background scheduler had likely died or stalled silently.
 - Changes: supervised `LiveScheduler.run_forever()` so poll failures are logged and retried, kept per-game alert collection failures from stopping the whole poll, kept one failed IRC send from terminating remaining alert delivery, and baselined already-live/final games on first scheduler poll to avoid stale alert floods after a restart.
 - Local verification: `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task064-pytest-cache --basetemp=.tmp\task064-pytest-basetemp` passes with 47 tests; `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
-- Deployment: pending.
+- Deployment: pushed and deployed `826ab3a` to the VPS. The deploy script rebuilt/restarted `mlb-irc-bot` and the in-container dry-run passed for `mlbotslop` on Libera `#mlbtest`.
+- Live verification: `docker compose logs` showed the new scheduler running and suppressing stale first-poll alerts, including 3 existing alerts for live game `824670` (SF@CHC). Rejoined `#mlbtest` twice after deploy; `mlbotslop` answered private `@mlb *` checks. No new channel alert appeared during the watch windows because a direct feed check still showed only the same 3 alert keys that had already been baselined.
+- Commit: `826ab3a9f3a0ad068a5a37e2a2e8f53065d98501`.
+- Resume prompt: Continue after TASK-064; the live scheduler is deployed with crash supervision and stale-backfill suppression. If announcements are questioned again, check `docker compose logs mlb-irc-bot` for scheduler exceptions/suppression lines, then compare the active game feed's alert keys against the SQLite store before changing code.
 
 ## 2026-06-07 - TASK-063: Release Workflow Validation
 
