@@ -10,7 +10,7 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 - `@mlb TEAM` shows today's game for a team, with win probability and active pitchers when live.
 - `@mlb TEAM tomorrow` shows tomorrow's game for a team.
 - `@mlb game GAMEPK` shows one game by MLB game id.
-- `@preview TEAM` or `@matchup TEAM` shows a compact game preview with probables, weather, lineup status, and team form when available.
+- `@preview TEAM`, `@matchup TEAM`, or `@preview game GAMEPK` shows a compact game preview with probables, weather, lineup status, and team form when available.
 - `@box TEAM` or `@box game GAMEPK` shows a compact R-H-E boxscore.
 - `@wp TEAM` shows current win probability and the biggest game swing.
 - `@stars TEAM` shows top boxscore performers.

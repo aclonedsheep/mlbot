@@ -104,8 +104,6 @@ checkout did not contain the backlog file.
 - Verification: `pytest` passes with 50 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
 
-## Current
-
 ### TASK-068 - Preview Highlights Splits And Scoring Alerts
 
 - Status: Done.
@@ -121,10 +119,23 @@ checkout did not contain the backlog file.
 - Verification: `pytest` passes with 54 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
 
+## Current
+
+### TASK-069 - Complete Help Coverage And Deploy
+
+- Status: Local checks passed; deployment pending.
+- Goal: make `@help` cover every command and subcommand/alias, then deploy the
+  current branch to the VPS.
+- Result: added command-specific help for `@preview`/`@matchup`,
+  `@highlights`, `@wp`, `@stars`, `@weather`, `@replay`, pitcher and lineup
+  commands, standings and wildcard, player/team stats, defense/arsenal,
+  transactions, and `@help`; documented `@preview game GAMEPK` in the command
+  docs and README.
+- Verification: `pytest` passes with 55 tests; `ruff check .` passes;
+  `python -m mlb_irc_bot --dry-run` passes.
+
 ## Next Candidates
 
-- Deploy TASK-068 to the VPS if you want the new commands and scoring-state
-  alerts live in `#mlbtest`.
 - Watch a naturally firing live alert in `#mlbtest` once games are active and
   make only narrow formatting tweaks if the alert context feels noisy in-channel.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after

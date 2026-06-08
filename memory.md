@@ -1,5 +1,37 @@
 # Project Memory
 
+## 2026-06-08 - TASK-069: Complete Help Coverage And Deploy
+
+- Goal: make `@help` cover every command and subcommand/alias, then deploy the
+  current branch to the VPS.
+- Starting point: local `main` is clean and ahead of `origin/main` by TASK-066
+  through TASK-068 commits; TASK-068 is locally verified but not deployed.
+- Planned changes: add per-command `@help` topics for all routed commands and
+  aliases, add a regression that help coverage stays aligned with the command
+  router, run the standard local checks, commit the help fix, deploy with the
+  canonical PowerShell script, and record the deployed commit.
+- Changes: added command-specific help for `@preview`/`@matchup`, `@highlights`,
+  `@wp`, `@stars`, `@weather`, `@replay`, pitcher and lineup commands,
+  standings and wildcard, player/team stats, defense/arsenal, transactions, and
+  `@help`; documented `@preview game GAMEPK` in the command docs and README;
+  added a regression that all routed commands and aliases have topic help.
+- Verification: `.\.venv\Scripts\python -m pytest tests\unit\test_commands.py
+  -q -o cache_dir=.tmp\task069-focused-pytest-cache
+  --basetemp=.tmp\task069-focused-pytest-basetemp` passes with 31 tests;
+  `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task069-pytest-cache
+  --basetemp=.tmp\task069-pytest-basetemp` passes with 55 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff
+  --check` passes.
+- Commit: pending.
+- Deployment: pending.
+- Resume prompt: Continue after TASK-069 local verification; `@help` now has
+  topic coverage for every routed command and alias, including `@preview game
+  GAMEPK`, and the standard local checks passed. Next step is deploying the
+  branch with `powershell.exe -ExecutionPolicy Bypass -File
+  .\scripts\deploy.ps1`, then recording the deployed commit and running a
+  compact `#mlbtest` sweep when practical.
+
 ## 2026-06-08 - TASK-068: Preview Highlights Splits And Scoring Alerts
 
 - Goal: implement the approved feature batch: compact `@preview`/`@matchup` game previews, `@highlights` game media links, expanded split aliases, and lead-change/tie-game/walk-off alerts.

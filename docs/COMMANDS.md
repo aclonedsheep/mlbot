@@ -17,6 +17,7 @@ codes for readability. The examples below are plaintext.
 - `@mlb game GAMEPK`: details for one MLB game id.
 - `@preview TEAM [today|tomorrow|yesterday]`: compact game preview with probables, weather, lineup status, and team form when available.
 - `@matchup TEAM [today|tomorrow|yesterday]`: alias for `@preview`.
+- `@preview game GAMEPK`: compact game preview for one MLB game id.
 
 Examples:
 
@@ -28,6 +29,7 @@ Examples:
 @mlb game 824832
 @preview NYY
 @matchup LAD tomorrow
+@preview game 824832
 ```
 
 ## Game Details
@@ -115,7 +117,8 @@ Examples:
 ## Help
 
 - `@help`: all commands.
-- `@help mlb`: detailed help for `@mlb`.
+- `@help <command>`: detailed help for any command or alias, such as
+  `@help mlb`, `@help matchup`, `@help wildcard`, or `@help highlights`.
 
 Common split aliases include `risp`, `vl`, `vr`, `home`, `away`, `lateclose`,
 `basesloaded`, `day`, `night`, `grass`, `turf`, `ahead`, `behind`, `tied`,

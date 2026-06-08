@@ -607,31 +607,48 @@ class CommandRouter:
             ]
         if topic in {"preview", "matchup"}:
             return [
-                f"{irc.bold(f'{prefix}preview')} TEAM [today|tomorrow|yesterday] or "
-                f"{irc.bold(f'{prefix}matchup')} TEAM [today|tomorrow|yesterday]"
+                f"{irc.bold(f'{prefix}preview')} TEAM [today|tomorrow|yesterday], "
+                f"{irc.bold(f'{prefix}matchup')} TEAM [today|tomorrow|yesterday], or "
+                f"{irc.bold(f'{prefix}preview game')} GAMEPK"
             ]
         if topic == "highlights":
             return [
                 f"{irc.bold(f'{prefix}highlights')} TEAM [today|yesterday] or "
                 f"{irc.bold(f'{prefix}highlights game')} GAMEPK"
             ]
-        if topic in {"wp", "stars", "weather", "replay"}:
+        if topic == "wp":
             return [
-                f"{irc.bold(f'{prefix}wp')} TEAM|game GAMEPK, "
-                f"{irc.bold(f'{prefix}stars')} TEAM|game GAMEPK, "
-                f"{irc.bold(f'{prefix}weather')} TEAM|game GAMEPK, "
-                f"{irc.bold(f'{prefix}replay')} TEAM|game GAMEPK"
+                f"{irc.bold(f'{prefix}wp')} TEAM [today|yesterday] or "
+                f"{irc.bold(f'{prefix}wp game')} GAMEPK"
             ]
-        if topic in {"mlbpitcher", "mlbpitchers", "mlblineup"}:
+        if topic == "stars":
             return [
-                f"{irc.bold(f'{prefix}mlbpitcher')} TEAM, "
-                f"{irc.bold(f'{prefix}mlbpitchers')} TEAM, "
-                f"{irc.bold(f'{prefix}mlblineup')} TEAM"
+                f"{irc.bold(f'{prefix}stars')} TEAM [today|yesterday] or "
+                f"{irc.bold(f'{prefix}stars game')} GAMEPK"
             ]
+        if topic == "weather":
+            return [
+                f"{irc.bold(f'{prefix}weather')} TEAM [today|yesterday] or "
+                f"{irc.bold(f'{prefix}weather game')} GAMEPK"
+            ]
+        if topic == "replay":
+            return [
+                f"{irc.bold(f'{prefix}replay')} TEAM [today|yesterday] or "
+                f"{irc.bold(f'{prefix}replay game')} GAMEPK"
+            ]
+        if topic == "mlbpitcher":
+            return [f"{irc.bold(f'{prefix}mlbpitcher')} TEAM"]
+        if topic == "mlbpitchers":
+            return [f"{irc.bold(f'{prefix}mlbpitchers')} TEAM"]
+        if topic == "mlblineup":
+            return [f"{irc.bold(f'{prefix}mlblineup')} TEAM"]
         if topic == "standings":
             return [
-                f"{irc.bold(f'{prefix}standings')} [AL|NL|TEAM] and "
-                f"{irc.bold(f'{prefix}wildcard')} [AL|NL|all]"
+                f"{irc.bold(f'{prefix}standings')} [AL|NL|TEAM] for division context"
+            ]
+        if topic == "wildcard":
+            return [
+                f"{irc.bold(f'{prefix}wildcard')} [AL|NL|all] for wildcard standings"
             ]
         if topic == "sstats":
             return [
@@ -639,11 +656,15 @@ class CommandRouter:
                 f"[season] [7 days|14 days|30 days|last N games]; "
                 "pitchers default to pitching"
             ]
-        if topic in {"gamelog", "splits"}:
+        if topic == "gamelog":
             return [
-                f"{irc.bold(f'{prefix}gamelog')} <player name> [hitting|pitching] [N]; "
-                f"{irc.bold(f'{prefix}splits')} <player name> "
-                "<risp|vl|vr|home|away|lateclose|basesloaded> [hitting|pitching]"
+                f"{irc.bold(f'{prefix}gamelog')} <player name> [hitting|pitching] [N]"
+            ]
+        if topic == "splits":
+            return [
+                f"{irc.bold(f'{prefix}splits')} <player name> <split> [hitting|pitching] "
+                "[season]; splits: risp, vl, vr, home, away, lateclose, basesloaded, "
+                "day, night, grass, turf, ahead, behind, tied, starter, reliever, b1-b9"
             ]
         if topic == "leaders":
             return [
@@ -653,29 +674,37 @@ class CommandRouter:
         if topic == "teamstats":
             return [
                 f"{irc.bold(f'{prefix}teamstats')} TEAM [hitting|pitching] [season] "
-                "[7 days|14 days|30 days] [risp|vl|vr|home|away|lateclose|basesloaded]"
+                "[7 days|14 days|30 days] [split]"
             ]
-        if topic in {"teamrank", "teamleaders"}:
+        if topic == "teamrank":
             return [
-                f"{irc.bold(f'{prefix}teamrank')} <stat> [hitting|pitching] [limit]; "
+                f"{irc.bold(f'{prefix}teamrank')} <stat> [hitting|pitching] [limit]"
+            ]
+        if topic == "teamleaders":
+            return [
                 f"{irc.bold(f'{prefix}teamleaders')} TEAM [category] [limit]"
             ]
-        if topic in {"defense", "arsenal"}:
-            return [
-                f"{irc.bold(f'{prefix}defense')} <player name> [season]; "
-                f"{irc.bold(f'{prefix}arsenal')} <player name> [season]"
-            ]
+        if topic == "defense":
+            return [f"{irc.bold(f'{prefix}defense')} <player name> [season]"]
+        if topic == "arsenal":
+            return [f"{irc.bold(f'{prefix}arsenal')} <player name> [season]"]
         if topic == "transactions":
             return [
                 f"{irc.bold(f'{prefix}transactions')} "
                 "[TEAM] [today|yesterday|7 days|YYYY-MM-DD]"
             ]
+        if topic == "help":
+            return [
+                f"{irc.bold(f'{prefix}help')} [command]; command topics include every "
+                "bot command and alias"
+            ]
         return [
             f"{irc.title('Commands')}: "
             f"{irc.section('games')}: {irc.bold(f'{prefix}mlb')}, "
             f"{irc.bold(f'{prefix}mlb *')}, {irc.bold(f'{prefix}mlb TEAM')}, "
-            f"{irc.bold(f'{prefix}preview')}, {irc.bold(f'{prefix}box')}, "
-            f"{irc.bold(f'{prefix}wp')}, {irc.bold(f'{prefix}stars')}, "
+            f"{irc.bold(f'{prefix}preview')}/{irc.bold(f'{prefix}matchup')}, "
+            f"{irc.bold(f'{prefix}box')}, {irc.bold(f'{prefix}wp')}, "
+            f"{irc.bold(f'{prefix}stars')}, "
             f"{irc.bold(f'{prefix}weather')}, {irc.bold(f'{prefix}highlights')}, "
             f"{irc.bold(f'{prefix}replay')}, {irc.bold(f'{prefix}mlbpitcher')}, "
             f"{irc.bold(f'{prefix}mlbpitchers')}, {irc.bold(f'{prefix}mlblineup')} | "

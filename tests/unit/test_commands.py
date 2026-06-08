@@ -492,7 +492,7 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
     error_replies = await router.handle_message("@bogus")
 
     assert _plain(help_replies) == [
-        "Commands: games: @mlb, @mlb *, @mlb TEAM, @preview, @box, @wp, @stars, "
+        "Commands: games: @mlb, @mlb *, @mlb TEAM, @preview/@matchup, @box, @wp, @stars, "
         "@weather, @highlights, @replay, @mlbpitcher, @mlbpitchers, @mlblineup | "
         "standings: @standings, @wildcard | stats: @sstats, @gamelog, "
         "@splits, @teamstats, @teamrank, @teamleaders, @leaders, @defense, "
@@ -503,6 +503,44 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
     assert COLOR in help_replies[0]
     assert BOLD in error_replies[0]
     assert COLOR in error_replies[0]
+
+
+@pytest.mark.asyncio
+async def test_help_topics_cover_all_commands_and_aliases() -> None:
+    router = CommandRouter(client=FakeClient(), settings=settings(), now=fixed_now)
+    topics = [
+        "mlb",
+        "preview",
+        "matchup",
+        "box",
+        "wp",
+        "stars",
+        "weather",
+        "replay",
+        "mlbpitcher",
+        "mlbpitchers",
+        "mlblineup",
+        "standings",
+        "wildcard",
+        "sstats",
+        "gamelog",
+        "splits",
+        "leaders",
+        "teamstats",
+        "teamrank",
+        "teamleaders",
+        "defense",
+        "arsenal",
+        "transactions",
+        "highlights",
+        "help",
+    ]
+
+    for topic in topics:
+        replies = await router.handle_message(f"@help {topic}")
+        plain = _plain(replies)
+        assert plain is not None
+        assert not plain[0].startswith("Commands:"), topic
 
 
 @pytest.mark.asyncio
