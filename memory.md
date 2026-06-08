@@ -1,5 +1,29 @@
 # Project Memory
 
+## 2026-06-08 - TASK-072: Fix Bases-Loaded Current Batter
+
+- Goal: fix bases-loaded alerts showing the wrong player as "up" when MLB's
+  live linescore offense payload names the last runner to reach base instead of
+  the current plate-appearance batter.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-071 handoff-only deployment record commit; TASK-071 app code is deployed
+  at `d6956eefda17a1f54998ba9f9f04392971b8ac25`.
+- Live inspection: MLB live feed game `824829` (SEA @ BAL) showed Gunnar
+  Henderson walking in the bottom of the 3rd to load the bases; he was then a
+  listed runner, and the next batter was Pete Alonso.
+- Changes: bases-loaded and late-threat current-batter selection now ignores a
+  linescore/current-play batter who is already listed on first, second, or
+  third; when that stale batter is the latest baserunner, the detector uses the
+  linescore `onDeck` hitter as the player coming up instead of repeating the
+  runner's name.
+- Verification: focused alert detector tests pass; full
+  `.\.venv\Scripts\python -m pytest -q -o
+  cache_dir=.tmp\task072-pytest-cache
+  --basetemp=.tmp\task072-pytest-basetemp` passes with 59 tests and known
+  dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
+  passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
+- Deployment: pending.
+
 ## 2026-06-08 - TASK-071: Highlight Filters And More Paging
 
 - Goal: add `@more` as a follow-up command for paged highlight results and add

@@ -170,6 +170,66 @@ def test_home_run_scoring_play_is_only_a_home_run_alert() -> None:
     assert strip_irc_formatting(alerts[0].message) == "HR: Mookie Betts homers."
 
 
+def test_bases_loaded_alert_uses_next_batter_when_linescore_batter_is_runner() -> None:
+    feed = {
+        "gameData": {
+            "game": {"pk": 824829},
+            "teams": {
+                "away": {"abbreviation": "SEA"},
+                "home": {"abbreviation": "BAL"},
+            },
+        },
+        "liveData": {
+            "linescore": {
+                "currentInning": 3,
+                "inningHalf": "Bottom",
+                "outs": 1,
+                "teams": {
+                    "away": {"runs": 0},
+                    "home": {"runs": 0},
+                },
+                "offense": {
+                    "team": {"id": 110, "name": "Baltimore Orioles"},
+                    "batter": {"id": 683002, "fullName": "Gunnar Henderson"},
+                    "onDeck": {"id": 624413, "fullName": "Pete Alonso"},
+                    "first": {"id": 683002, "fullName": "Gunnar Henderson"},
+                    "second": {"id": 621493, "fullName": "Taylor Ward"},
+                    "third": {"id": 677942, "fullName": "Blaze Alexander"},
+                },
+            },
+            "plays": {
+                "currentPlay": {
+                    "about": {"atBatIndex": 21, "isComplete": True},
+                    "matchup": {
+                        "batter": {"id": 683002, "fullName": "Gunnar Henderson"}
+                    },
+                    "result": {"event": "Walk", "description": "Gunnar Henderson walks."},
+                },
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 21, "isComplete": True},
+                        "matchup": {
+                            "batter": {"id": 683002, "fullName": "Gunnar Henderson"}
+                        },
+                        "result": {
+                            "event": "Walk",
+                            "description": "Gunnar Henderson walks.",
+                        },
+                    }
+                ],
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed)
+    bases_loaded = next(alert for alert in alerts if alert.alert_type == "bases_loaded")
+
+    assert strip_irc_formatting(bases_loaded.message) == (
+        "Bases loaded: SEA 0, BAL 0 | Bottom 3, 1 out | "
+        "Baltimore Orioles batting, Pete Alonso up."
+    )
+
+
 def test_collect_alerts_detects_new_contextual_alerts() -> None:
     feed = {
         "gamePk": 777,

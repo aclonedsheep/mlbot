@@ -192,10 +192,29 @@ checkout did not contain the backlog file.
   in-channel. The scoring filter returned MP4 links numbered `1/19` through
   `3/19`, then `@more` returned the next MP4 page starting at `4/19`.
 
+### TASK-072 - Fix Bases-Loaded Current Batter
+
+- Status: Locally verified; deployment pending.
+- Goal: fix bases-loaded alerts showing the latest baserunner as the hitter
+  coming up when MLB's live linescore/current-play payload has not advanced
+  past the plate appearance that just loaded the bases.
+- Live inspection: MLB live feed game `824829` (SEA @ BAL) showed Gunnar
+  Henderson walking in the bottom of the 3rd to load the bases; Gunnar was then
+  listed as a runner, and the next batter was Pete Alonso.
+- Result: current-batter selection now rejects any candidate who is already
+  listed on first, second, or third. If the stale linescore batter is a listed
+  runner, bases-loaded context falls forward to the `onDeck` hitter instead of
+  announcing the runner as "up."
+- Verification: focused alert detector tests pass; `pytest` passes with 59
+  tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes.
+
 ## Next Candidates
 
+- Deploy the TASK-072 bases-loaded current-batter fix and confirm the VPS
+  container dry-run passes.
 - Watch a naturally firing live alert in `#mlbtest` once games are active and
-  make only narrow formatting tweaks if the alert context feels noisy in-channel.
+  make only narrow formatting tweaks if alert context still feels noisy
+  in-channel.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after
   deployment to judge IRC readability and confirm `@highlights` returns MP4
   URLs in-channel.

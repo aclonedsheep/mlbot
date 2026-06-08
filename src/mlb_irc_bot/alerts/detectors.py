@@ -831,16 +831,53 @@ def _outs_text(value: Any) -> str:
 
 
 def _current_batter(feed: JsonDict, offense: JsonDict) -> str:
-    batter = _person_name(offense.get("batter"))
+    base_runners = [
+        runner
+        for runner in (offense.get("first"), offense.get("second"), offense.get("third"))
+        if runner
+    ]
+    current_play = _plays(feed).get("currentPlay") or {}
+    current_play_batter = (current_play.get("matchup") or {}).get("batter")
+    if not (current_play.get("about") or {}).get("isComplete"):
+        batter = _active_batter_name(current_play_batter, base_runners)
+        if batter:
+            return batter
+    offense_batter = offense.get("batter")
+    batter = _active_batter_name(offense_batter, base_runners)
     if batter:
         return batter
-    batter = _person_name((_plays(feed).get("currentPlay") or {}).get("matchup", {}).get("batter"))
+    if _is_listed_runner(offense_batter, base_runners):
+        batter = _person_name(offense.get("onDeck"))
+        if batter:
+            return batter
+    batter = _active_batter_name(current_play_batter, base_runners)
     if batter:
         return batter
     plays = _all_plays(feed)
     if not plays:
         return ""
-    return _person_name((plays[-1].get("matchup") or {}).get("batter"))
+    return _active_batter_name((plays[-1].get("matchup") or {}).get("batter"), base_runners)
+
+
+def _active_batter_name(person: JsonDict | None, base_runners: list[JsonDict]) -> str:
+    if _is_listed_runner(person, base_runners):
+        return ""
+    return _person_name(person)
+
+
+def _is_listed_runner(person: JsonDict | None, base_runners: list[JsonDict]) -> bool:
+    if not person:
+        return False
+    person_id = person.get("id")
+    person_name = _person_name(person).casefold()
+    for runner in base_runners:
+        runner_id = runner.get("id")
+        if person_id is not None and runner_id is not None and str(person_id) == str(runner_id):
+            return True
+        runner_name = _person_name(runner).casefold()
+        if person_name and runner_name and person_name == runner_name:
+            return True
+    return False
 
 
 def _first_float(*values: Any) -> float | None:
