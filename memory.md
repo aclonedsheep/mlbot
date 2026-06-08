@@ -26,13 +26,21 @@
   --check` passes. A live client probe for game `822807` resolved the Brandon
   Valenzuela sample highlight to
   `https://mlb-cuts-diamond.mlb.com/FORGE/2026/2026-06/07/5ede2bd0-63d98c4c-69ac4da6-csvm-diamondgcp-asset_1280x720_59_4000K.mp4`.
-- Commit: pending.
-- Deployment: pending.
-- Resume prompt: Continue after TASK-070 local verification; `@highlights`
-  resolves MLB highlight page links to direct MP4 URLs when available, including
-  the Brandon Valenzuela sample URL. Next step is committing, deploying with
-  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`, and
-  running a compact live `#mlbtest` `@highlights game 822807` check.
+- Commit: `5a8f78ad5aa362206cb11754226f2173ae777671`.
+- Deployment: pushed and deployed `5a8f78a` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  remote checkout fast-forwarded to `5a8f78ad5aa362206cb11754226f2173ae777671`,
+  the `mlb-irc-bot` Compose service rebuilt/recreated successfully, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`.
+- Live check: joined Libera `#mlbtest` as `AIHighlight656` and confirmed
+  `@highlights game 822807` returned three separate IRC replies, each with a
+  direct `.mp4` URL, including the Brandon Valenzuela sample URL.
+- Resume prompt: Continue after TASK-070; `@highlights` resolves MLB highlight
+  page links to direct MP4 URLs when available, emits one IRC line per returned
+  highlight, is committed at `5a8f78ad5aa362206cb11754226f2173ae777671`, and is
+  deployed on the VPS with live `#mlbtest` proof. Next useful step is a compact
+  live sweep of `@preview`, expanded split aliases, and any naturally firing
+  scoring-state alert during active games.
 
 ## 2026-06-08 - TASK-069: Complete Help Coverage And Deploy
 

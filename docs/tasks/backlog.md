@@ -144,7 +144,7 @@ checkout did not contain the backlog file.
 
 ### TASK-070 - Resolve Highlight Links To MP4
 
-- Status: Local checks passed; deployment pending.
+- Status: Done.
 - Goal: make `@highlights` share direct MLB MP4 playback links instead of
   public MLB video page links when direct media is available.
 - Result: highlight parsing now prefers direct MP4 playback URLs from
@@ -158,6 +158,14 @@ checkout did not contain the backlog file.
   passes; `git diff --check` passes. A live client probe for game `822807`
   resolved the Brandon Valenzuela sample highlight to
   `https://mlb-cuts-diamond.mlb.com/FORGE/2026/2026-06/07/5ede2bd0-63d98c4c-69ac4da6-csvm-diamondgcp-asset_1280x720_59_4000K.mp4`.
+- Deployment: pushed and deployed `5a8f78a` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`. A
+  post-deploy probe showed the remote checkout clean at
+  `5a8f78ad5aa362206cb11754226f2173ae777671` with the Compose service up.
+- Live check: joined Libera `#mlbtest` as `AIHighlight656` and confirmed
+  `@highlights game 822807` returned three separate IRC replies, each with a
+  direct `.mp4` URL, including the Brandon Valenzuela sample URL.
 
 ## Next Candidates
 
