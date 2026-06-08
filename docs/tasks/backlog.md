@@ -74,14 +74,16 @@ checkout did not contain the backlog file.
   section labels and calmer routine stat-value emphasis.
 - Verification: `pytest` passes with 48 tests; `ruff check .` passes;
   `python -m mlb_irc_bot --dry-run` passes.
-- Deployment: not deployed yet; live IRC preview and deploy remain available
-  follow-ups.
+- Deployment: pushed and deployed `6251942` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `mlbotslop` on Libera `#mlbtest`. A
+  post-deploy probe showed the container running with `restarts=0` and the
+  remote checkout clean at `62519428bdbab99d240b326ac10af809a7db31bc`.
 
 ## Next Candidates
 
 - Preview TASK-065 formatting in real `#mlbtest`, especially `@help`, `@mlb *`,
   `@mlb TEAM`, `@box TEAM`, one stat-heavy command, and any live alert that
   fires naturally.
-- Deploy TASK-065 to the VPS after preview approval.
 - Add a Docker Compose config check to CI or another environment where Docker is
   available.

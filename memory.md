@@ -27,14 +27,23 @@
 - Local verification: `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\task065-pytest-cache --basetemp=.tmp\task065-pytest-basetemp`
   passes with 48 tests; `.\.venv\Scripts\python -m ruff check .` passes;
   `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
-- Deployment: not deployed yet; next step is live `#mlbtest` preview and VPS
-  deploy if the formatting looks good in-channel.
+- Deployment: pushed and deployed `6251942` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`. The
+  script fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated
+  `mlb-irc-bot`, and the in-container dry-run passed for `mlbotslop` on Libera
+  `#mlbtest`.
+- Post-deploy check: `docker compose ps` showed `mlbot-mlb-irc-bot-1` up;
+  in-container `python -m mlb_irc_bot --dry-run` passed; `docker inspect`
+  showed `status=running`, `running=true`, `restarts=0`, and
+  `started=2026-06-08T13:08:44.074797494Z`; the remote checkout was clean at
+  `62519428bdbab99d240b326ac10af809a7db31bc`.
 - Commit: `8f4d9ef154eccce6e295071f9c8bfb6c31df3e3c`.
-- Resume prompt: Continue after TASK-065; local alert-context and calmer
-  formatting changes are committed but not deployed. Preview `@help`, `@mlb *`,
-  `@mlb TEAM`, `@box TEAM`, one stat-heavy command, and any naturally firing
-  alert in `#mlbtest`; if the formatting looks good, deploy with the existing
-  `.\scripts\deploy.ps1` workflow and record the deployment result.
+- Resume prompt: Continue after TASK-065; alert-context and calmer formatting
+  changes are deployed to `mlbotslop` in Libera `#mlbtest`. When games are live,
+  preview `@help`, `@mlb *`, `@mlb TEAM`, `@box TEAM`, one stat-heavy command,
+  and any naturally firing alert; if formatting needs tweaks, keep them narrow
+  in `src/mlb_irc_bot/irc_format.py`, `src/mlb_irc_bot/mlb/formatters.py`, or
+  `src/mlb_irc_bot/alerts/detectors.py`.
 
 ## 2026-06-08 - TASK-064: Restore Live Announcement Scheduler
 
