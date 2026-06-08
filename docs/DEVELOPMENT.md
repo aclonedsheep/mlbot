@@ -34,6 +34,13 @@ Deploy `main` to the VPS with:
 .\scripts\deploy.ps1
 ```
 
+If the local PowerShell execution policy blocks repo scripts, use a
+process-scoped bypass instead:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1
+```
+
 The script pushes `main`, SSHes to `208.109.241.169`, fast-forwards
 `/home/wolfb/mlbot`, rebuilds `mlb-irc-bot` with Docker Compose, restarts it,
 and runs `python -m mlb_irc_bot --dry-run` inside the container. It fails if
@@ -45,6 +52,12 @@ Useful options:
 .\scripts\deploy.ps1 -SkipPush
 .\scripts\deploy.ps1 -DryRun -AllowDirty
 .\scripts\deploy.ps1 -DeployHost other-host -RemotePath /path/to/mlbot
+```
+
+For a local release-workflow dry run that does not push or SSH:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -DryRun -AllowDirty -SkipPush
 ```
 
 ## Live API Probes
