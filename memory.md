@@ -22,7 +22,25 @@
   --basetemp=.tmp\task072-pytest-basetemp` passes with 59 tests and known
   dependency deprecation warnings; `.\.venv\Scripts\python -m ruff check .`
   passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes.
-- Deployment: pending.
+- Commit: `d70e56b4bd3aec25d9424bc0c2a45271e2f26149`.
+- Deployment: pushed and deployed `d70e56b` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  remote checkout fast-forwarded to `d70e56b4bd3aec25d9424bc0c2a45271e2f26149`,
+  the `mlb-irc-bot` Compose service rebuilt/recreated successfully, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote `git status --short --branch` was clean at
+  `d70e56b`; `docker inspect` showed `status=running`, `running=true`,
+  `restarts=0`, and `started=2026-06-08T23:34:28.861832182Z`.
+- Live check gap: an immediate MLB live-feed sweep found no live games with
+  bases loaded, so there was no honest natural alert replay available after
+  deploy.
+- Resume prompt: Continue after TASK-072; bases-loaded alerts now avoid naming
+  a listed baserunner as the current batter and fall forward to the on-deck
+  hitter when MLB has not advanced the plate-appearance payload. The fix is
+  committed at `d70e56b4bd3aec25d9424bc0c2a45271e2f26149`, deployed on the VPS,
+  and remote dry-run/container checks pass. Next useful step is to watch a
+  naturally firing bases-loaded or late-threat alert in `#mlbtest` when one
+  occurs, or continue with the compact command sweep from the backlog.
 
 ## 2026-06-08 - TASK-071: Highlight Filters And More Paging
 

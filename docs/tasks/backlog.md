@@ -194,7 +194,7 @@ checkout did not contain the backlog file.
 
 ### TASK-072 - Fix Bases-Loaded Current Batter
 
-- Status: Locally verified; deployment pending.
+- Status: Done.
 - Goal: fix bases-loaded alerts showing the latest baserunner as the hitter
   coming up when MLB's live linescore/current-play payload has not advanced
   past the plate appearance that just loaded the bases.
@@ -207,11 +207,17 @@ checkout did not contain the backlog file.
   announcing the runner as "up."
 - Verification: focused alert detector tests pass; `pytest` passes with 59
   tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes.
+- Deployment: pushed and deployed `d70e56b` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`. A
+  post-deploy probe showed the remote checkout clean at
+  `d70e56b4bd3aec25d9424bc0c2a45271e2f26149` with the container running,
+  `restarts=0`.
+- Live check gap: an immediate MLB live-feed sweep found no live games with
+  bases loaded, so there was no natural alert replay available after deploy.
 
 ## Next Candidates
 
-- Deploy the TASK-072 bases-loaded current-batter fix and confirm the VPS
-  container dry-run passes.
 - Watch a naturally firing live alert in `#mlbtest` once games are active and
   make only narrow formatting tweaks if alert context still feels noisy
   in-channel.
