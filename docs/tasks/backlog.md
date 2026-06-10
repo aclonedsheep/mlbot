@@ -218,7 +218,7 @@ checkout did not contain the backlog file.
 
 ### TASK-073 - Consolidate Overlapping Play Alerts
 
-- Status: Local checks pass; deployment pending.
+- Status: Done.
 - Goal: send one IRC message for an MLB play when multiple enabled detectors
   identify the same event, while preserving compact secondary facts such as
   win-probability swing, leverage, and batted-ball quality.
@@ -231,13 +231,20 @@ checkout did not contain the backlog file.
 - Verification: focused alert and scheduler regressions pass; `pytest` passes
   with 62 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
   passes; `git diff --check` passes.
-- Deployment: pending after the implementation commit.
+- Deployment: pushed and deployed `325142f` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`. A
+  post-deploy probe showed the remote checkout clean at
+  `325142f50ce54521c1418cac42061ad7671065be`, with the container running and
+  `restarts=0`.
+- Live check gap: immediate post-deploy logs showed only expected first-poll
+  suppression of existing alerts, so there was no natural overlapping-play
+  channel replay to judge in `#mlbtest`.
 
 ## Next Candidates
 
-- Watch a naturally firing live alert in `#mlbtest` once games are active and
-  make only narrow formatting tweaks if alert context still feels noisy
-  in-channel.
+- Watch a naturally firing overlapping-play alert in `#mlbtest` and make only
+  narrow formatting tweaks if the consolidated suffix feels noisy in-channel.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after
   deployment to judge IRC readability and confirm `@highlights` returns MP4
   URLs in-channel.

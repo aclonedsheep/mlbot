@@ -24,8 +24,26 @@
   `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
   mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
   Windows line-ending warnings.
-- Pending: implementation commit, deploy, post-deploy container health check,
-  and final handoff update.
+- Commit: `325142f50ce54521c1418cac42061ad7671065be`.
+- Deployment: pushed and deployed `325142f` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  remote checkout fast-forwarded to `325142f50ce54521c1418cac42061ad7671065be`,
+  the `mlb-irc-bot` Compose service rebuilt/recreated successfully, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote `git status --short --branch` was clean at
+  `325142f`; `docker compose ps` showed `mlbot-mlb-irc-bot-1` up; `docker
+  inspect` showed `status=running`, `running=true`, `restarts=0`, and
+  `started=2026-06-10T20:35:05.140876316Z`.
+- Live check gap: immediate post-deploy logs showed first-poll suppression of
+  existing alerts for several games but no fresh natural overlapping-play alert
+  to judge in `#mlbtest`.
+- Resume prompt: Continue after TASK-073; overlapping play-derived alerts now
+  consolidate into one IRC message with a priority headline and compact
+  secondary facts, are committed at
+  `325142f50ce54521c1418cac42061ad7671065be`, deployed on the VPS, and remote
+  dry-run/container checks pass. Next useful step is to watch a naturally
+  firing overlapping-play alert in `#mlbtest` and tweak only if the combined
+  suffix feels noisy.
 
 ## 2026-06-08 - TASK-072: Fix Bases-Loaded Current Batter
 
