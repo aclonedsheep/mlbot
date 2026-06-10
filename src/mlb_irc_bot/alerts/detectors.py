@@ -5,6 +5,20 @@ from mlb_irc_bot import irc_format as irc
 from mlb_irc_bot.alerts.messages import Alert
 
 JsonDict = dict[str, Any]
+PRIORITY_WALKOFF = 0
+PRIORITY_HOME_RUN = 10
+PRIORITY_SCORING_STATE = 20
+PRIORITY_SCORING = 30
+PRIORITY_WIN_PROBABILITY = 40
+PRIORITY_HIGH_LEVERAGE = 50
+PRIORITY_BARREL = 60
+PRIORITY_HARD_HIT = 70
+
+DETAIL_SCORING_STATE = 10
+DETAIL_WIN_PROBABILITY = 20
+DETAIL_HIGH_LEVERAGE = 30
+DETAIL_BARREL = 40
+DETAIL_HARD_HIT = 50
 
 
 def collect_alerts(
@@ -74,6 +88,8 @@ def _scoring_alerts(feed: JsonDict) -> list[Alert]:
                 key=key,
                 alert_type="scoring",
                 game_pk=game_pk,
+                group_key=_play_group_key(game_pk, play, index),
+                priority=PRIORITY_SCORING,
                 message=(
                     f"{_alert_label('Scoring play', irc.IRCColor.RED)}: "
                     f"{description}{_game_update_suffix(feed)}"
@@ -137,15 +153,22 @@ def _scoring_state_alerts_for_play(
     at_bat = about.get("atBatIndex", index)
     description = _play_description(play)
     context = _play_score_context(feed, play, away_score, home_score)
+    group_key = _play_group_key(game_pk, play, index)
     if _is_walkoff_play(feed, play, previous_away, previous_home, away_score, home_score):
+        team = _team_abbreviation(feed, "home")
         return [
             Alert(
                 key=f"{game_pk}:walkoff:{at_bat}",
                 alert_type="walkoff",
                 game_pk=game_pk,
+                group_key=group_key,
+                priority=PRIORITY_WALKOFF,
+                detail_order=DETAIL_SCORING_STATE,
+                detail_key="scoring_state",
+                detail_text=f"{irc.section('Walk-off')} {irc.team(team, home=True)}",
                 message=(
                     f"{_alert_label('Walk-off', irc.IRCColor.GREEN)}: "
-                    f"{irc.team(_team_abbreviation(feed, 'home'), home=True)} wins "
+                    f"{irc.team(team, home=True)} wins "
                     f"on {description}{context}"
                 ),
             )
@@ -159,6 +182,14 @@ def _scoring_state_alerts_for_play(
                 key=f"{game_pk}:tie_game:{at_bat}",
                 alert_type="tie_game",
                 game_pk=game_pk,
+                group_key=group_key,
+                priority=PRIORITY_SCORING_STATE,
+                detail_order=DETAIL_SCORING_STATE,
+                detail_key="scoring_state",
+                detail_text=(
+                    f"{irc.section('Tie game')} "
+                    f"{irc.team(team, home=scoring_side == 'home')}"
+                ),
                 message=(
                     f"{_alert_label('Tie game', irc.IRCColor.YELLOW)}: "
                     f"{irc.team(team, home=scoring_side == 'home')} ties it "
@@ -175,6 +206,14 @@ def _scoring_state_alerts_for_play(
                 key=f"{game_pk}:lead_change:{at_bat}",
                 alert_type="lead_change",
                 game_pk=game_pk,
+                group_key=group_key,
+                priority=PRIORITY_SCORING_STATE,
+                detail_order=DETAIL_SCORING_STATE,
+                detail_key="scoring_state",
+                detail_text=(
+                    f"{irc.section(label)} "
+                    f"{irc.team(team, home=current_leader == 'home')}"
+                ),
                 message=(
                     f"{_alert_label(label, irc.IRCColor.RED)}: "
                     f"{irc.team(team, home=current_leader == 'home')} takes the lead "
@@ -199,6 +238,8 @@ def _home_run_alert(
         key=key,
         alert_type="home_run",
         game_pk=game_pk,
+        group_key=_play_group_key(game_pk, play, index),
+        priority=PRIORITY_HOME_RUN,
         message=(
             f"{_alert_label('HR', irc.IRCColor.ORANGE)}: "
             f"{description}{context}{detail_text}"
@@ -225,14 +266,21 @@ def _win_probability_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
         description = result.get("description") or result.get("event") or "Win probability swing"
         context = _game_update_suffix(feed)
         key = f"{game_pk}:wp_swing:{about.get('atBatIndex', index)}"
+        detail_team = irc.team(team, home=added >= 0)
+        detail_value = irc.value("+" + _format_percent(abs(added)))
         alerts.append(
             Alert(
                 key=key,
                 alert_type="win_probability",
                 game_pk=game_pk,
+                group_key=_play_group_key(game_pk, play, index),
+                priority=PRIORITY_WIN_PROBABILITY,
+                detail_order=DETAIL_WIN_PROBABILITY,
+                detail_key="win_probability",
+                detail_text=f"{irc.section('WP')} {detail_team} {detail_value}",
                 message=(
                     f"{_alert_label('WP swing', irc.IRCColor.LIGHT_CYAN)}: "
-                    f"{irc.team(team)} {irc.value('+' + _format_percent(abs(added)))} "
+                    f"{detail_team} {detail_value} "
                     f"{_play_inning_text(about)}: "
                     f"{description}{context}"
                 ),
@@ -254,14 +302,20 @@ def _high_leverage_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
         description = result.get("description") or result.get("event") or "plate appearance"
         context = _game_update_suffix(feed)
         key = f"{game_pk}:high_leverage:{about.get('atBatIndex', index)}"
+        leverage_text = _format_number(leverage)
         alerts.append(
             Alert(
                 key=key,
                 alert_type="high_leverage",
                 game_pk=game_pk,
+                group_key=_play_group_key(game_pk, play, index),
+                priority=PRIORITY_HIGH_LEVERAGE,
+                detail_order=DETAIL_HIGH_LEVERAGE,
+                detail_key="high_leverage",
+                detail_text=f"{irc.section('LI')} {irc.value(leverage_text)}",
                 message=(
                     f"{_alert_label('High leverage', irc.IRCColor.PURPLE)}: "
-                    f"{irc.value(f'LI {_format_number(leverage)}')} "
+                    f"{irc.value(f'LI {leverage_text}')} "
                     f"{_play_inning_text(about)}, "
                     f"{irc.bold(batter)} - {description}{context}"
                 ),
@@ -291,12 +345,18 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
         description = result.get("description") or result.get("event") or "Batted ball"
         context = _game_update_suffix(feed)
         details = _batted_ball_details(exit_velocity, launch_angle, distance)
+        group_key = _play_group_key(game_pk, play, index)
         if exit_velocity >= hard_hit_threshold:
             alerts.append(
                 Alert(
                     key=f"{game_pk}:hard_hit:{play_id}",
                     alert_type="hard_hit",
                     game_pk=game_pk,
+                    group_key=group_key,
+                    priority=PRIORITY_HARD_HIT,
+                    detail_order=DETAIL_HARD_HIT,
+                    detail_key="batted_ball",
+                    detail_text=f"{irc.section('Hard hit')} {details}",
                     message=(
                         f"{_alert_label('Hard hit', irc.IRCColor.ORANGE)}: "
                         f"{description}{context} | {details}"
@@ -309,6 +369,11 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
                     key=f"{game_pk}:barrel:{play_id}",
                     alert_type="barrel",
                     game_pk=game_pk,
+                    group_key=group_key,
+                    priority=PRIORITY_BARREL,
+                    detail_order=DETAIL_BARREL,
+                    detail_key="batted_ball",
+                    detail_text=f"{irc.section('Barrel')} {details}",
                     message=(
                         f"{_alert_label('Barrel', irc.IRCColor.YELLOW)}: "
                         f"{description}{context} | {details}"
@@ -724,6 +789,15 @@ def _scoring_side(
 def _play_description(play: JsonDict) -> str:
     result = play.get("result") or {}
     return result.get("description") or result.get("event") or "the scoring play"
+
+
+def _play_group_key(game_pk: int | None, play: JsonDict, index: int) -> str | None:
+    if game_pk is None:
+        return None
+    at_bat = (play.get("about") or {}).get("atBatIndex", index)
+    if at_bat is None:
+        return None
+    return f"{game_pk}:play:{at_bat}"
 
 
 def _play_score_context(

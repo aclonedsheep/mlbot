@@ -216,6 +216,23 @@ checkout did not contain the backlog file.
 - Live check gap: an immediate MLB live-feed sweep found no live games with
   bases loaded, so there was no natural alert replay available after deploy.
 
+### TASK-073 - Consolidate Overlapping Play Alerts
+
+- Status: Local checks pass; deployment pending.
+- Goal: send one IRC message for an MLB play when multiple enabled detectors
+  identify the same event, while preserving compact secondary facts such as
+  win-probability swing, leverage, and batted-ball quality.
+- Result: play-derived alerts now carry a shared game/at-bat group key,
+  headline priority, and optional detail text. The scheduler filters disabled,
+  suppressed, and already-seen alerts first, then consolidates remaining
+  same-play alerts into one natural headline with stable secondary details.
+  Sent batches record the play sentinel plus each component alert key so later
+  polls do not re-announce delayed duplicates for the same play.
+- Verification: focused alert and scheduler regressions pass; `pytest` passes
+  with 62 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
+  passes; `git diff --check` passes.
+- Deployment: pending after the implementation commit.
+
 ## Next Candidates
 
 - Watch a naturally firing live alert in `#mlbtest` once games are active and

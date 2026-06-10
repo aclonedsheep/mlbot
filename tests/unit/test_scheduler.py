@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from mlb_irc_bot.irc_format import strip_irc_formatting
 from mlb_irc_bot.mlb.models import GameDetail, GameSummary, TeamInfo
 from mlb_irc_bot.scheduler import LiveScheduler
 
@@ -127,6 +128,97 @@ async def test_scheduler_send_failure_does_not_stop_remaining_alerts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_scheduler_sends_one_consolidated_message_for_overlapping_play_alerts() -> None:
+    game = _game_summary()
+    raw = {
+        "gamePk": game.game_pk,
+        "gameData": {
+            "game": {"pk": game.game_pk},
+            "teams": {
+                "away": {"id": 141, "abbreviation": "TOR"},
+                "home": {"id": 110, "abbreviation": "BAL"},
+            },
+        },
+        "liveData": {
+            "plays": {
+                "scoringPlays": [1],
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 30, "inning": 7, "halfInning": "bottom"},
+                        "result": {
+                            "event": "Single",
+                            "description": "Baltimore takes the lead.",
+                            "awayScore": 0,
+                            "homeScore": 1,
+                        },
+                    },
+                    {
+                        "about": {"atBatIndex": 31, "inning": 8, "halfInning": "top"},
+                        "result": {
+                            "event": "Double",
+                            "eventType": "double",
+                            "description": "Bo Bichette doubles.",
+                            "awayScore": 2,
+                            "homeScore": 1,
+                        },
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 111.2,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 390.0,
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+        },
+    }
+    win_probability_plays = [
+        {
+            "homeTeamWinProbabilityAdded": -18.4,
+            "leverageIndex": 3.2,
+            "about": {"atBatIndex": 31, "inning": 8, "halfInning": "top"},
+            "matchup": {"batter": {"fullName": "Bo Bichette"}},
+            "result": {"description": "Bo Bichette doubles."},
+        }
+    ]
+    client = FakeClient(
+        game,
+        raw_by_game={game.game_pk: raw},
+        win_probability_plays_by_game={game.game_pk: win_probability_plays},
+    )
+    store = FakeStore()
+    sent_messages: list[str] = []
+    scheduler = LiveScheduler(
+        client=client,
+        store=store,
+        settings=settings(),
+        send_alert=_capture(sent_messages),
+    )
+
+    await scheduler.poll_once()
+
+    assert len(sent_messages) == 1
+    assert strip_irc_formatting(sent_messages[0]) == (
+        "Lead change: TOR takes the lead on Bo Bichette doubles. | "
+        "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | LI 3.2 | "
+        "Barrel EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+    assert set(store.sent_keys) == {
+        "123:play:31",
+        "123:score:31",
+        "123:lead_change:31",
+        "123:wp_swing:31",
+        "123:high_leverage:31",
+        "123:hard_hit:bbe-1",
+        "123:barrel:bbe-1",
+    }
+
+
+@pytest.mark.asyncio
 async def test_scheduler_suppresses_existing_alerts_for_live_game_on_first_poll() -> None:
     game = _game_summary(
         status="In Progress",
@@ -152,8 +244,15 @@ async def test_scheduler_suppresses_existing_alerts_for_live_game_on_first_poll(
 
 
 class FakeClient:
-    def __init__(self, *games: GameSummary) -> None:
+    def __init__(
+        self,
+        *games: GameSummary,
+        raw_by_game: dict[int, dict] | None = None,
+        win_probability_plays_by_game: dict[int, list[dict]] | None = None,
+    ) -> None:
         self.games = list(games)
+        self.raw_by_game = raw_by_game or {}
+        self.win_probability_plays_by_game = win_probability_plays_by_game or {}
         self.detail_calls: list[int] = []
 
     async def get_schedule(self, _target_date):
@@ -162,6 +261,9 @@ class FakeClient:
     async def get_game_detail(self, game_pk: int) -> GameDetail:
         self.detail_calls.append(game_pk)
         game = next(game for game in self.games if game.game_pk == game_pk)
+        raw = self.raw_by_game.get(game_pk)
+        if raw is not None:
+            return GameDetail(summary=game, raw=raw)
         return GameDetail(
             summary=game,
             raw={
@@ -182,7 +284,7 @@ class FakeClient:
         return None
 
     async def get_win_probability_plays(self, _game_pk: int):
-        return []
+        return self.win_probability_plays_by_game.get(_game_pk, [])
 
 
 class FakeStore:

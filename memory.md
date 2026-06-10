@@ -1,5 +1,32 @@
 # Project Memory
 
+## 2026-06-10 - TASK-073: Consolidate Overlapping Play Alerts
+
+- Goal: consolidate multiple alert classes for the same MLB play into one IRC
+  message that keeps a natural headline and compact secondary facts such as
+  win-probability swing, leverage, and batted-ball quality.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-072 deployment-record commit `835d637`; deployed app code is documented
+  at `d70e56b4bd3aec25d9424bc0c2a45271e2f26149`.
+- Planned changes: add merge metadata to the internal alert model, group
+  play-derived alerts by game and at-bat after enabled/seen/suppression checks,
+  choose one headline by alert priority, append stable secondary details, mark
+  both component keys and the group sentinel as sent, and leave state alerts
+  such as bases-loaded and late-threat standalone.
+- Changes: `Alert` now carries optional group/detail metadata and alert batches
+  consolidate by game/at-bat. Play-derived alerts share those keys and provide
+  priority/detail hints; the scheduler filters disabled, suppressed, and seen
+  alerts before consolidation, sends one batch message, and marks the play
+  sentinel plus component keys as sent.
+- Verification: focused alert/scheduler tests pass; `.\.venv\Scripts\python -m
+  pytest -q -o cache_dir=.tmp\pytest-cache --basetemp=.tmp\pytest-basetemp`
+  passes with 62 tests and known dependency deprecation warnings;
+  `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
+  mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
+  Windows line-ending warnings.
+- Pending: implementation commit, deploy, post-deploy container health check,
+  and final handoff update.
+
 ## 2026-06-08 - TASK-072: Fix Bases-Loaded Current Batter
 
 - Goal: fix bases-loaded alerts showing the wrong player as "up" when MLB's

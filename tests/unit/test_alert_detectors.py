@@ -1,4 +1,5 @@
 from mlb_irc_bot.alerts.detectors import collect_alerts
+from mlb_irc_bot.alerts.messages import consolidate_alerts
 from mlb_irc_bot.irc_format import BOLD, COLOR, strip_irc_formatting
 
 
@@ -312,6 +313,139 @@ def test_collect_alerts_detects_new_contextual_alerts() -> None:
     assert by_type["weather"].startswith(
         "Game info: TOR @ BAL - first pitch 2026-06-06 18:12:00.000 UTC"
     )
+
+
+def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
+    feed = {
+        "gamePk": 777,
+        "gameData": {
+            "teams": {
+                "away": {"id": 141, "abbreviation": "TOR"},
+                "home": {"id": 110, "abbreviation": "BAL"},
+            },
+        },
+        "winProbabilityPlays": [
+            {
+                "homeTeamWinProbabilityAdded": -18.4,
+                "leverageIndex": 3.2,
+                "about": {"atBatIndex": 31, "inning": 8, "halfInning": "top"},
+                "matchup": {"batter": {"fullName": "Bo Bichette"}},
+                "result": {"description": "Bo Bichette doubles."},
+            }
+        ],
+        "liveData": {
+            "plays": {
+                "scoringPlays": [1],
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 30, "inning": 7, "halfInning": "bottom"},
+                        "result": {
+                            "event": "Single",
+                            "description": "Baltimore takes the lead.",
+                            "awayScore": 0,
+                            "homeScore": 1,
+                        },
+                    },
+                    {
+                        "about": {"atBatIndex": 31, "inning": 8, "halfInning": "top"},
+                        "result": {
+                            "event": "Double",
+                            "eventType": "double",
+                            "description": "Bo Bichette doubles.",
+                            "awayScore": 2,
+                            "homeScore": 1,
+                        },
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 111.2,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 390.0,
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed)
+    batches = consolidate_alerts(alerts)
+
+    assert len(batches) == 1
+    assert {alert.alert_type for alert in batches[0].components} == {
+        "scoring",
+        "lead_change",
+        "win_probability",
+        "high_leverage",
+        "hard_hit",
+        "barrel",
+    }
+    assert batches[0].key == "777:play:31"
+    assert strip_irc_formatting(batches[0].message) == (
+        "Lead change: TOR takes the lead on Bo Bichette doubles. | "
+        "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | LI 3.2 | "
+        "Barrel EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+
+
+def test_consolidate_alerts_uses_barrel_detail_over_hard_hit() -> None:
+    feed = {
+        "gamePk": 777,
+        "gameData": {
+            "teams": {
+                "away": {"id": 141, "abbreviation": "TOR"},
+                "home": {"id": 110, "abbreviation": "BAL"},
+            },
+        },
+        "liveData": {
+            "plays": {
+                "scoringPlays": [1],
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 30, "inning": 6, "halfInning": "top"},
+                        "result": {
+                            "event": "Single",
+                            "description": "Toronto opens the scoring.",
+                            "awayScore": 1,
+                            "homeScore": 0,
+                        },
+                    },
+                    {
+                        "about": {"atBatIndex": 31, "inning": 6, "halfInning": "top"},
+                        "result": {
+                            "event": "Double",
+                            "eventType": "double",
+                            "description": "Bo Bichette doubles. Runner scores.",
+                            "awayScore": 2,
+                            "homeScore": 0,
+                        },
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 111.2,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 390.0,
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+        },
+    }
+
+    batch = consolidate_alerts(collect_alerts(feed))[0]
+    plain = strip_irc_formatting(batch.message)
+
+    assert plain == (
+        "Scoring play: Bo Bichette doubles. Runner scores. | "
+        "Barrel EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+    assert "Hard hit EV" not in plain
 
 
 def test_collect_alerts_detects_tie_go_ahead_and_walkoff_scoring_state() -> None:

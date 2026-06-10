@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from time import monotonic
 
 from mlb_irc_bot.alerts.detectors import collect_alerts, final_alert_from_summary
-from mlb_irc_bot.alerts.messages import Alert
+from mlb_irc_bot.alerts.messages import Alert, AlertBatch, consolidate_alerts
 from mlb_irc_bot.config import Settings
 from mlb_irc_bot.mlb.client import MLBAPIError, MLBStatsClient
 from mlb_irc_bot.mlb.models import GameSummary
@@ -88,7 +88,12 @@ class LiveScheduler:
             if final_alert is not None:
                 alerts.append(final_alert)
             if self._should_suppress_existing_alerts(game):
-                suppressed_keys = {alert.key for alert in alerts}
+                suppressed_keys = {
+                    key
+                    for alert in alerts
+                    for key in (alert.key, alert.group_key)
+                    if key is not None
+                }
                 self._suppressed_alert_keys.update(suppressed_keys)
                 if suppressed_keys:
                     LOGGER.info(
@@ -97,9 +102,8 @@ class LiveScheduler:
                         game.game_pk,
                     )
                 continue
-            for alert in alerts:
-                if alert.key in self._suppressed_alert_keys:
-                    continue
+            eligible_alerts = await self._eligible_alerts(alerts)
+            for alert in consolidate_alerts(eligible_alerts):
                 try:
                     await self._send_once(alert)
                 except asyncio.CancelledError:
@@ -129,18 +133,35 @@ class LiveScheduler:
         self._last_near_start_poll[game.game_pk] = now_monotonic
         return True
 
-    async def _send_once(self, alert: Alert) -> None:
-        if not self._enabled(alert.alert_type):
-            return
-        if await self.store.seen(alert.key):
-            return
+    async def _eligible_alerts(self, alerts: list[Alert]) -> list[Alert]:
+        eligible_alerts = []
+        for alert in alerts:
+            if alert.key in self._suppressed_alert_keys:
+                continue
+            if alert.group_key and alert.group_key in self._suppressed_alert_keys:
+                continue
+            if not self._enabled(alert.alert_type):
+                continue
+            if alert.group_key and await self.store.seen(alert.group_key):
+                continue
+            if await self.store.seen(alert.key):
+                continue
+            eligible_alerts.append(alert)
+        return eligible_alerts
+
+    async def _send_once(self, alert: AlertBatch) -> None:
         await self.send_alert(alert.message)
-        await self.store.mark_sent(
-            alert_key=alert.key,
-            alert_type=alert.alert_type,
-            game_pk=alert.game_pk,
-            message=alert.message,
-        )
+        for key in alert.keys_to_mark:
+            component = next(
+                (component for component in alert.components if component.key == key),
+                None,
+            )
+            await self.store.mark_sent(
+                alert_key=key,
+                alert_type=component.alert_type if component else alert.alert_type,
+                game_pk=component.game_pk if component else alert.game_pk,
+                message=component.message if component else alert.message,
+            )
 
     def _enabled(self, alert_type: str) -> bool:
         return {
