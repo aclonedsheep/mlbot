@@ -19,6 +19,12 @@ DETAIL_WIN_PROBABILITY = 20
 DETAIL_HIGH_LEVERAGE = 30
 DETAIL_BARREL = 40
 DETAIL_HARD_HIT = 50
+BASES: tuple[tuple[str, str], ...] = (
+    ("first", "1B"),
+    ("second", "2B"),
+    ("third", "3B"),
+)
+SCORING_BASE_ORDER = ("3B", "2B", "1B")
 
 
 def collect_alerts(
@@ -303,6 +309,8 @@ def _high_leverage_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
         context = _game_update_suffix(feed)
         key = f"{game_pk}:high_leverage:{about.get('atBatIndex', index)}"
         leverage_text = _format_number(leverage)
+        situation = _high_leverage_situation_text(feed, play)
+        situation_text = f" ({situation})" if situation else ""
         alerts.append(
             Alert(
                 key=key,
@@ -312,10 +320,12 @@ def _high_leverage_alerts(feed: JsonDict, threshold: float) -> list[Alert]:
                 priority=PRIORITY_HIGH_LEVERAGE,
                 detail_order=DETAIL_HIGH_LEVERAGE,
                 detail_key="high_leverage",
-                detail_text=f"{irc.section('LI')} {irc.value(leverage_text)}",
+                detail_text=(
+                    f"{irc.section('LI')} {irc.value(leverage_text)}{situation_text}"
+                ),
                 message=(
                     f"{_alert_label('High leverage', irc.IRCColor.PURPLE)}: "
-                    f"{irc.value(f'LI {leverage_text}')} "
+                    f"{irc.value(f'LI {leverage_text}')}{situation_text} "
                     f"{_play_inning_text(about)}, "
                     f"{irc.bold(batter)} - {description}{context}"
                 ),
@@ -735,6 +745,179 @@ def _is_barrel_or_sweet_spot(
     if launch_angle is None:
         return False
     return exit_velocity >= exit_velocity_threshold and 8 <= launch_angle <= 32
+
+
+def _high_leverage_situation_text(feed: JsonDict, play: JsonDict) -> str:
+    base_codes = _play_start_base_codes(play)
+    base_state = _base_state_text(base_codes) or _men_on_base_split_text(play)
+    score_delta = _batting_score_delta(feed, play)
+    parts = [
+        part
+        for part in (
+            _score_delta_text(score_delta),
+            _run_pressure_text(score_delta, base_codes),
+        )
+        if part
+    ]
+    if base_state and (len(base_codes) != 1 or not parts):
+        parts.append(base_state)
+    outs = _play_start_outs(play)
+    if outs is not None:
+        parts.append(_outs_text(outs))
+    return ", ".join(parts)
+
+
+def _play_start_base_codes(play: JsonDict) -> tuple[str, ...]:
+    offense = _play_start_offense(play)
+    if offense is not None:
+        return tuple(label for key, label in BASES if offense.get(key))
+
+    splits = ((play.get("matchup") or {}).get("splits") or {})
+    men_on = str(splits.get("menOnBase") or "").replace("_", " ").strip().lower()
+    if men_on == "loaded":
+        return tuple(label for _, label in BASES)
+
+    starts = {
+        str((runner.get("movement") or {}).get("start") or "").upper()
+        for runner in play.get("runners") or []
+    }
+    return tuple(label for _, label in BASES if label in starts)
+
+
+def _play_start_offense(play: JsonDict) -> JsonDict | None:
+    for event in reversed(play.get("playEvents") or []):
+        if "offense" in event:
+            return event.get("offense") or {}
+    if "offense" in play:
+        return play.get("offense") or {}
+    return None
+
+
+def _base_state_text(base_codes: tuple[str, ...]) -> str:
+    if not base_codes:
+        return ""
+    if len(base_codes) == 3:
+        return "bases loaded"
+    label = "/".join(base_codes)
+    prefix = "runner" if len(base_codes) == 1 else "runners"
+    return f"{prefix} on {label}"
+
+
+def _men_on_base_split_text(play: JsonDict) -> str:
+    splits = ((play.get("matchup") or {}).get("splits") or {})
+    men_on = str(splits.get("menOnBase") or "").replace("_", " ").strip().lower()
+    if not men_on or men_on == "empty":
+        return ""
+    if men_on == "loaded":
+        return "bases loaded"
+    if men_on == "risp":
+        return "runner in scoring position"
+    if men_on in {"men on", "menon", "on"}:
+        return "men on base"
+    return men_on
+
+
+def _batting_score_delta(feed: JsonDict, play: JsonDict) -> int | None:
+    score = _play_start_score(feed, play) or _play_result_score(play)
+    if score is None:
+        return None
+    away_score, home_score = score
+    if away_score is None or home_score is None:
+        return None
+    side = _batting_side_for_play(play)
+    if side == "away":
+        return away_score - home_score
+    if side == "home":
+        return home_score - away_score
+    return None
+
+
+def _play_start_score(feed: JsonDict, play: JsonDict) -> tuple[int, int] | None:
+    target_at_bat = (play.get("about") or {}).get("atBatIndex", play.get("atBatIndex"))
+    if target_at_bat is None:
+        return None
+    previous_score: tuple[int, int] | None = None
+    for candidate in _all_plays(feed):
+        candidate_at_bat = (candidate.get("about") or {}).get(
+            "atBatIndex",
+            candidate.get("atBatIndex"),
+        )
+        if candidate_at_bat == target_at_bat:
+            return previous_score
+        candidate_score = _play_result_score(candidate)
+        if candidate_score is not None:
+            previous_score = candidate_score
+    return None
+
+
+def _play_result_score(play: JsonDict) -> tuple[int, int] | None:
+    result = play.get("result") or {}
+    away_score = _first_int(result.get("awayScore"), result.get("away_score"))
+    home_score = _first_int(result.get("homeScore"), result.get("home_score"))
+    if away_score is None or home_score is None:
+        return None
+    return away_score, home_score
+
+
+def _batting_side_for_play(play: JsonDict) -> str:
+    about = play.get("about") or {}
+    is_top = about.get("isTopInning")
+    if isinstance(is_top, bool):
+        return "away" if is_top else "home"
+    half = str(about.get("halfInning") or "").lower()
+    if half.startswith("top"):
+        return "away"
+    if half.startswith("bottom"):
+        return "home"
+    return ""
+
+
+def _score_delta_text(score_delta: int | None) -> str:
+    if score_delta is None:
+        return ""
+    if score_delta < 0:
+        return f"down {abs(score_delta)}"
+    if score_delta > 0:
+        return f"up {score_delta}"
+    return "tie game"
+
+
+def _run_pressure_text(
+    score_delta: int | None,
+    base_codes: tuple[str, ...],
+) -> str:
+    if score_delta is None:
+        return ""
+    scoring_order = [base for base in SCORING_BASE_ORDER if base in base_codes]
+    if score_delta < 0:
+        deficit = abs(score_delta)
+        if deficit <= len(scoring_order):
+            return f"tying run on {scoring_order[deficit - 1]}"
+        if deficit == len(scoring_order) + 1:
+            return "tying run at plate"
+        return ""
+    if score_delta == 0:
+        if scoring_order:
+            return f"go-ahead run on {scoring_order[0]}"
+        return "go-ahead run at plate"
+    return ""
+
+
+def _play_start_outs(play: JsonDict) -> int | None:
+    for event in reversed(play.get("playEvents") or []):
+        outs = _first_int((event.get("preCount") or {}).get("outs"))
+        if outs is not None:
+            return outs
+    for event in reversed(play.get("playEvents") or []):
+        outs = _first_int((event.get("count") or {}).get("outs"))
+        if outs is not None:
+            return outs
+    outs = _first_int((play.get("count") or {}).get("outs"))
+    if outs is None:
+        return None
+    if (play.get("result") or {}).get("isOut") is True and outs > 0:
+        return outs - 1
+    return outs
 
 
 def _win_probability_plays(feed: JsonDict) -> list[JsonDict]:

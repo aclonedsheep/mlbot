@@ -184,6 +184,15 @@ async def test_scheduler_sends_one_consolidated_message_for_overlapping_play_ale
             "about": {"atBatIndex": 31, "inning": 8, "halfInning": "top"},
             "matchup": {"batter": {"fullName": "Bo Bichette"}},
             "result": {"description": "Bo Bichette doubles."},
+            "playEvents": [
+                {
+                    "preCount": {"outs": 1},
+                    "offense": {
+                        "batter": {"fullName": "Bo Bichette"},
+                        "second": {"fullName": "Runner Two"},
+                    },
+                }
+            ],
         }
     ]
     client = FakeClient(
@@ -205,7 +214,8 @@ async def test_scheduler_sends_one_consolidated_message_for_overlapping_play_ale
     assert len(sent_messages) == 1
     assert strip_irc_formatting(sent_messages[0]) == (
         "Lead change: TOR takes the lead on Bo Bichette doubles. | "
-        "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | LI 3.2 | "
+        "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | "
+        "LI 3.2 (down 1, tying run on 2B, 1 out) | "
         "Barrel Bo Bichette: EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
     assert set(store.sent_keys) == {

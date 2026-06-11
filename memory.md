@@ -1,5 +1,30 @@
 # Project Memory
 
+## 2026-06-11 - TASK-076: Add High-Leverage Situation Context
+
+- Goal: make high-leverage alerts explain why the plate appearance is high
+  leverage by adding compact game situation context such as base state, outs,
+  and tying/go-ahead run status.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-075 deployment-record commit `4cc9d57`; deployed app code is documented
+  at `f5a2d1be930d58f8655611315641b1373236655e`.
+- Planned changes: derive high-leverage situation text from win-probability
+  play fields, include it in primary high-leverage alerts and consolidated LI
+  secondary details, add regression coverage for primary/consolidated output,
+  run local checks, update backlog/memory, commit, deploy, and verify the
+  container.
+- Changes: high-leverage alerts now append compact situation context when MLB
+  exposes it, using the pre-at-bat score from the play log when available plus
+  base occupancy, tying/go-ahead run status, and outs. Consolidated same-play
+  messages now carry the same context in the LI secondary detail.
+- Verification: focused alert/scheduler tests pass; `.\.venv\Scripts\python -m
+  pytest -q -o cache_dir=.tmp\pytest-cache --basetemp=.tmp\pytest-basetemp`
+  passes with 66 tests and known dependency deprecation warnings;
+  `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
+  mlb_irc_bot --dry-run` passes.
+- Pending: implementation commit, deployment, post-deploy container health
+  check, and live-alert observation if a natural high-leverage event occurs.
+
 ## 2026-06-11 - TASK-075: Raise Barrel Alert EV Threshold
 
 - Goal: make barrel alerts fire only for special hard-hit balls by requiring

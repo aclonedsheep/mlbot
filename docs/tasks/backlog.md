@@ -287,6 +287,20 @@ checkout did not contain the backlog file.
   suppression for existing game alerts, with no fresh natural barrel alert to
   judge in `#mlbtest`.
 
+### TASK-076 - Add High-Leverage Situation Context
+
+- Status: Local checks pass; deployment pending.
+- Goal: make high-leverage alerts explain why a plate appearance is tense,
+  rather than only printing the LI value.
+- Result: high-leverage alerts now append compact situation context when MLB
+  exposes it, using pre-at-bat score from the play log when available plus base
+  occupancy, tying/go-ahead run status, and outs. Consolidated same-play
+  messages include the same context in the LI secondary detail.
+- Verification: focused alert and scheduler regressions pass; `pytest` passes
+  with 66 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
+  passes.
+- Deployment: pending after the implementation commit.
+
 ## Next Candidates
 
 - Watch a naturally firing barrel or overlapping-play alert in `#mlbtest` and

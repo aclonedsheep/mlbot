@@ -315,6 +315,54 @@ def test_collect_alerts_detects_new_contextual_alerts() -> None:
     )
 
 
+def test_high_leverage_alert_includes_situation_context() -> None:
+    feed = {
+        "gamePk": 777,
+        "winProbabilityPlays": [
+            {
+                "leverageIndex": 4.06,
+                "about": {
+                    "atBatIndex": 58,
+                    "inning": 7,
+                    "halfInning": "bottom",
+                    "isTopInning": False,
+                },
+                "count": {"outs": 2},
+                "matchup": {"batter": {"fullName": "Pete Alonso"}},
+                "result": {
+                    "description": "Pete Alonso strikes out.",
+                    "awayScore": 5,
+                    "homeScore": 2,
+                    "isOut": True,
+                },
+                "playEvents": [
+                    {
+                        "preCount": {"outs": 1},
+                        "offense": {
+                            "batter": {"fullName": "Pete Alonso"},
+                            "first": {"fullName": "Gunnar Henderson"},
+                            "second": {"fullName": "Taylor Ward"},
+                            "third": {"fullName": "Blaze Alexander"},
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    alerts = collect_alerts(feed)
+    high_leverage = next(alert for alert in alerts if alert.alert_type == "high_leverage")
+
+    assert strip_irc_formatting(high_leverage.message) == (
+        "High leverage: LI 4.1 "
+        "(down 3, tying run on 1B, bases loaded, 1 out) "
+        "Bottom 7, Pete Alonso - Pete Alonso strikes out."
+    )
+    assert strip_irc_formatting(high_leverage.detail_text or "") == (
+        "LI 4.1 (down 3, tying run on 1B, bases loaded, 1 out)"
+    )
+
+
 def test_batted_ball_alerts_include_hitter_when_result_text_is_generic() -> None:
     feed = {
         "gamePk": 777,
@@ -434,6 +482,15 @@ def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
                 "about": {"atBatIndex": 31, "inning": 8, "halfInning": "top"},
                 "matchup": {"batter": {"fullName": "Bo Bichette"}},
                 "result": {"description": "Bo Bichette doubles."},
+                "playEvents": [
+                    {
+                        "preCount": {"outs": 1},
+                        "offense": {
+                            "batter": {"fullName": "Bo Bichette"},
+                            "second": {"fullName": "Runner Two"},
+                        },
+                    }
+                ],
             }
         ],
         "liveData": {
@@ -490,7 +547,8 @@ def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
     assert batches[0].key == "777:play:31"
     assert strip_irc_formatting(batches[0].message) == (
         "Lead change: TOR takes the lead on Bo Bichette doubles. | "
-        "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | LI 3.2 | "
+        "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | "
+        "LI 3.2 (down 1, tying run on 2B, 1 out) | "
         "Barrel Bo Bichette: EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
 
