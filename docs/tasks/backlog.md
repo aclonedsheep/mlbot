@@ -266,7 +266,7 @@ checkout did not contain the backlog file.
 
 ### TASK-075 - Raise Barrel Alert EV Threshold
 
-- Status: Local checks pass; deployment pending.
+- Status: Done.
 - Goal: make barrel alerts fire only for special hard-hit balls instead of
   routine 95+ mph sweet-spot contact.
 - Result: barrel detection now requires the configured hard-hit exit-velocity
@@ -276,7 +276,16 @@ checkout did not contain the backlog file.
 - Verification: focused alert and scheduler regressions pass; `pytest` passes
   with 65 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
   passes; `git diff --check` passes.
-- Deployment: pending after the implementation commit.
+- Deployment: pushed and deployed `f5a2d1b` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot` from `101b79b` to `f5a2d1b`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `f5a2d1be930d58f8655611315641b1373236655e`; Docker reported
+  `mlbot-mlb-irc-bot-1` running with `restarts=0`.
+- Live check gap: immediate post-deploy logs showed only expected first-poll
+  suppression for existing game alerts, with no fresh natural barrel alert to
+  judge in `#mlbtest`.
 
 ## Next Candidates
 

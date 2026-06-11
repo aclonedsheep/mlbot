@@ -24,8 +24,25 @@
   `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
   mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
   Windows line-ending warnings.
-- Pending: implementation commit, deploy, post-deploy container health check,
-  and final handoff update.
+- Commit: `f5a2d1be930d58f8655611315641b1373236655e`
+  (`[TASK-075] Raise barrel alert EV threshold`).
+- Deployment: pushed and deployed `f5a2d1b` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  deploy fast-forwarded `/home/wolfb/mlbot` from `101b79b` to `f5a2d1b`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `f5a2d1be930d58f8655611315641b1373236655e`; `docker inspect` reported
+  `status=running running=true restarts=0
+  started=2026-06-11T17:59:45.3511781Z`; `docker compose ps` showed
+  `mlbot-mlb-irc-bot-1` up.
+- Live check gap: immediate post-deploy logs showed only expected first-poll
+  suppression for existing game alerts, with no fresh natural barrel alert to
+  judge in `#mlbtest`.
+- Resume prompt: Continue after TASK-075; barrel alerts now require the
+  configured hard-hit EV threshold plus the 8-32 degree launch-angle window,
+  implementation commit `f5a2d1b` is deployed, and the local deployment-record
+  commit is the latest handoff checkpoint.
 
 ## 2026-06-11 - TASK-074: Include Hitters In Barrel Alerts
 
