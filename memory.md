@@ -22,8 +22,26 @@
   `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
   mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
   Windows line-ending warnings.
-- Pending: implementation commit, deploy, post-deploy container health check,
-  and final handoff update.
+- Commit: `101b79bcba88ef6f44fc38938f1da1349d1e2bca`.
+- Deployment: pushed and deployed `101b79b` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  remote checkout fast-forwarded to `101b79bcba88ef6f44fc38938f1da1349d1e2bca`,
+  the `mlb-irc-bot` Compose service rebuilt/recreated successfully, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote `git status --short --branch` was clean at
+  `101b79b`; `docker compose ps` showed `mlbot-mlb-irc-bot-1` up; `docker
+  inspect` showed `status=running`, `running=true`, `restarts=0`, and
+  `started=2026-06-11T17:38:45.495111566Z`.
+- Live check gap: immediate post-deploy logs had no fresh barrel alert to judge
+  in `#mlbtest`.
+- Resume prompt: Continue after TASK-074; barrel and hard-hit alerts now include
+  the hitter from `matchup.batter` when MLB result text is generic, barrel
+  secondary details include the hitter, and barrel-primary batches suppress
+  redundant hard-hit details. The fix is committed at
+  `101b79bcba88ef6f44fc38938f1da1349d1e2bca`, deployed on the VPS, and remote
+  dry-run/container checks pass. Next useful step is to watch a naturally
+  firing barrel alert in `#mlbtest` and tweak only if the live phrasing still
+  feels off.
 
 ## 2026-06-10 - TASK-073: Consolidate Overlapping Play Alerts
 

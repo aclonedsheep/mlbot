@@ -243,7 +243,7 @@ checkout did not contain the backlog file.
 
 ### TASK-074 - Include Hitters In Barrel Alerts
 
-- Status: Local checks pass; deployment pending.
+- Status: Done.
 - Goal: fix barrel and hard-hit alerts that can omit the hitter's name when MLB
   sends generic batted-ball result text.
 - Result: batted-ball alerts now derive their visible subject from
@@ -255,7 +255,14 @@ checkout did not contain the backlog file.
 - Verification: focused alert and scheduler regressions pass; `pytest` passes
   with 63 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
   passes; `git diff --check` passes.
-- Deployment: pending after the implementation commit.
+- Deployment: pushed and deployed `101b79b` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot`, rebuilt/recreated `mlb-irc-bot`, and the
+  in-container dry-run passed for `slopstats` on Libera `#mlbtest`. A
+  post-deploy probe showed the remote checkout clean at
+  `101b79bcba88ef6f44fc38938f1da1349d1e2bca`, with the container running and
+  `restarts=0`.
+- Live check gap: immediate post-deploy logs had no fresh barrel alert to judge
+  in `#mlbtest`.
 
 ## Next Candidates
 
