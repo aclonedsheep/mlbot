@@ -341,10 +341,10 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
         play_id = _batted_ball_play_id(play) or str(
             (play.get("about") or {}).get("atBatIndex", index)
         )
-        result = play.get("result") or {}
-        description = result.get("description") or result.get("event") or "Batted ball"
+        description = _batted_ball_description(play)
         context = _game_update_suffix(feed)
         details = _batted_ball_details(exit_velocity, launch_angle, distance)
+        detail_subject = _batted_ball_detail_subject(play)
         group_key = _play_group_key(game_pk, play, index)
         if exit_velocity >= hard_hit_threshold:
             alerts.append(
@@ -356,7 +356,7 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
                     priority=PRIORITY_HARD_HIT,
                     detail_order=DETAIL_HARD_HIT,
                     detail_key="batted_ball",
-                    detail_text=f"{irc.section('Hard hit')} {details}",
+                    detail_text=f"{irc.section('Hard hit')} {detail_subject}{details}",
                     message=(
                         f"{_alert_label('Hard hit', irc.IRCColor.ORANGE)}: "
                         f"{description}{context} | {details}"
@@ -373,7 +373,7 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
                     priority=PRIORITY_BARREL,
                     detail_order=DETAIL_BARREL,
                     detail_key="batted_ball",
-                    detail_text=f"{irc.section('Barrel')} {details}",
+                    detail_text=f"{irc.section('Barrel')} {detail_subject}{details}",
                     message=(
                         f"{_alert_label('Barrel', irc.IRCColor.YELLOW)}: "
                         f"{description}{context} | {details}"
@@ -698,6 +698,20 @@ def _batted_ball_play_id(play: JsonDict) -> str:
         if play_id and not fallback:
             fallback = play_id
     return fallback
+
+
+def _batted_ball_description(play: JsonDict) -> str:
+    result = play.get("result") or {}
+    description = result.get("description") or result.get("event") or "Batted ball"
+    batter = _person_name((play.get("matchup") or {}).get("batter"))
+    if not batter or batter.casefold() in str(description).casefold():
+        return str(description)
+    return f"{batter} - {description}"
+
+
+def _batted_ball_detail_subject(play: JsonDict) -> str:
+    batter = _person_name((play.get("matchup") or {}).get("batter"))
+    return f"{irc.bold(batter)}: " if batter else ""
 
 
 def _batted_ball_details(

@@ -161,6 +161,7 @@ async def test_scheduler_sends_one_consolidated_message_for_overlapping_play_ale
                             "awayScore": 2,
                             "homeScore": 1,
                         },
+                        "matchup": {"batter": {"fullName": "Bo Bichette"}},
                         "playEvents": [
                             {
                                 "playId": "bbe-1",
@@ -205,7 +206,7 @@ async def test_scheduler_sends_one_consolidated_message_for_overlapping_play_ale
     assert strip_irc_formatting(sent_messages[0]) == (
         "Lead change: TOR takes the lead on Bo Bichette doubles. | "
         "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | LI 3.2 | "
-        "Barrel EV 111.2 mph, LA 24 deg, Dist 390 ft"
+        "Barrel Bo Bichette: EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
     assert set(store.sent_keys) == {
         "123:play:31",

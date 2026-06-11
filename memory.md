@@ -1,5 +1,30 @@
 # Project Memory
 
+## 2026-06-11 - TASK-074: Include Hitters In Barrel Alerts
+
+- Goal: fix barrel and hard-hit alerts that can omit the hitter's name when MLB
+  sends generic result text for a batted-ball play.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-073 deployment-record commit `e4aa401`; deployed app code is documented
+  at `325142f50ce54521c1418cac42061ad7671065be`.
+- Planned changes: derive a batted-ball alert subject from `matchup.batter`
+  plus result text, preserve existing descriptions that already name the
+  hitter, add regression coverage for generic barrel text, run local checks,
+  update backlog/memory, commit, deploy, and verify the container.
+- Changes: batted-ball alert text now prefixes generic MLB result text with the
+  batter from `matchup.batter`, while leaving descriptions that already include
+  the hitter unchanged. Consolidated barrel/hard-hit detail text now includes
+  the hitter when available, and barrel-primary batches suppress redundant
+  hard-hit detail for the same batted ball.
+- Verification: focused alert/scheduler tests pass; `.\.venv\Scripts\python -m
+  pytest -q -o cache_dir=.tmp\pytest-cache --basetemp=.tmp\pytest-basetemp`
+  passes with 63 tests and known dependency deprecation warnings;
+  `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
+  mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
+  Windows line-ending warnings.
+- Pending: implementation commit, deploy, post-deploy container health check,
+  and final handoff update.
+
 ## 2026-06-10 - TASK-073: Consolidate Overlapping Play Alerts
 
 - Goal: consolidate multiple alert classes for the same MLB play into one IRC

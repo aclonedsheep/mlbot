@@ -315,6 +315,47 @@ def test_collect_alerts_detects_new_contextual_alerts() -> None:
     )
 
 
+def test_batted_ball_alerts_include_hitter_when_result_text_is_generic() -> None:
+    feed = {
+        "gamePk": 777,
+        "liveData": {
+            "plays": {
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 31},
+                        "result": {"event": "Double", "eventType": "double"},
+                        "matchup": {"batter": {"fullName": "Cal Raleigh"}},
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 111.2,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 390.0,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed)
+    by_type = {alert.alert_type: strip_irc_formatting(alert.message) for alert in alerts}
+    batch = consolidate_alerts(alerts)[0]
+
+    assert by_type["hard_hit"] == (
+        "Hard hit: Cal Raleigh - Double | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+    assert by_type["barrel"] == (
+        "Barrel: Cal Raleigh - Double | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+    assert strip_irc_formatting(batch.message) == (
+        "Barrel: Cal Raleigh - Double | EV 111.2 mph, LA 24 deg, Dist 390 ft"
+    )
+
+
 def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
     feed = {
         "gamePk": 777,
@@ -355,6 +396,7 @@ def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
                             "awayScore": 2,
                             "homeScore": 1,
                         },
+                        "matchup": {"batter": {"fullName": "Bo Bichette"}},
                         "playEvents": [
                             {
                                 "playId": "bbe-1",
@@ -387,7 +429,7 @@ def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
     assert strip_irc_formatting(batches[0].message) == (
         "Lead change: TOR takes the lead on Bo Bichette doubles. | "
         "TOR 2, BAL 1 | Top 8 | WP TOR +18.4% | LI 3.2 | "
-        "Barrel EV 111.2 mph, LA 24 deg, Dist 390 ft"
+        "Barrel Bo Bichette: EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
 
 
@@ -422,6 +464,7 @@ def test_consolidate_alerts_uses_barrel_detail_over_hard_hit() -> None:
                             "awayScore": 2,
                             "homeScore": 0,
                         },
+                        "matchup": {"batter": {"fullName": "Bo Bichette"}},
                         "playEvents": [
                             {
                                 "playId": "bbe-1",
@@ -443,7 +486,7 @@ def test_consolidate_alerts_uses_barrel_detail_over_hard_hit() -> None:
 
     assert plain == (
         "Scoring play: Bo Bichette doubles. Runner scores. | "
-        "Barrel EV 111.2 mph, LA 24 deg, Dist 390 ft"
+        "Barrel Bo Bichette: EV 111.2 mph, LA 24 deg, Dist 390 ft"
     )
     assert "Hard hit EV" not in plain
 

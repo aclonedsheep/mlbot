@@ -241,10 +241,27 @@ checkout did not contain the backlog file.
   suppression of existing alerts, so there was no natural overlapping-play
   channel replay to judge in `#mlbtest`.
 
+### TASK-074 - Include Hitters In Barrel Alerts
+
+- Status: Local checks pass; deployment pending.
+- Goal: fix barrel and hard-hit alerts that can omit the hitter's name when MLB
+  sends generic batted-ball result text.
+- Result: batted-ball alerts now derive their visible subject from
+  `matchup.batter` plus the MLB result text, preserving descriptions that
+  already include the hitter while prefixing generic text such as `Double`.
+  Consolidated barrel/hard-hit details also include the hitter when available,
+  and a barrel primary no longer appends a redundant hard-hit detail for the
+  same batted ball.
+- Verification: focused alert and scheduler regressions pass; `pytest` passes
+  with 63 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
+  passes; `git diff --check` passes.
+- Deployment: pending after the implementation commit.
+
 ## Next Candidates
 
-- Watch a naturally firing overlapping-play alert in `#mlbtest` and make only
-  narrow formatting tweaks if the consolidated suffix feels noisy in-channel.
+- Watch a naturally firing barrel or overlapping-play alert in `#mlbtest` and
+  make only narrow formatting tweaks if the consolidated suffix feels noisy
+  in-channel.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after
   deployment to judge IRC readability and confirm `@highlights` returns MP4
   URLs in-channel.

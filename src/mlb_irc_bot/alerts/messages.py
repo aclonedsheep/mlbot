@@ -82,10 +82,13 @@ def _secondary_details(
     alerts: list[tuple[int, Alert]], primary: Alert
 ) -> list[str]:
     by_key: dict[str, tuple[int, int, str]] = {}
+    primary_detail_key = primary.detail_key
     for position, alert in alerts:
         if alert is primary or alert.detail_order is None or not alert.detail_text:
             continue
         detail_key = alert.detail_key or alert.key
+        if primary_detail_key is not None and detail_key == primary_detail_key:
+            continue
         candidate = (alert.detail_order, position, alert.detail_text)
         existing = by_key.get(detail_key)
         if existing is None or candidate[:2] < existing[:2]:
