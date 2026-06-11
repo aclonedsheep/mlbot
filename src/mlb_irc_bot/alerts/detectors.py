@@ -363,7 +363,7 @@ def _batted_ball_alerts(feed: JsonDict, hard_hit_threshold: float) -> list[Alert
                     ),
                 )
             )
-        if _is_barrel_or_sweet_spot(exit_velocity, launch_angle):
+        if _is_barrel_or_sweet_spot(exit_velocity, launch_angle, hard_hit_threshold):
             alerts.append(
                 Alert(
                     key=f"{game_pk}:barrel:{play_id}",
@@ -727,10 +727,14 @@ def _batted_ball_details(
     return ", ".join(parts)
 
 
-def _is_barrel_or_sweet_spot(exit_velocity: float, launch_angle: float | None) -> bool:
+def _is_barrel_or_sweet_spot(
+    exit_velocity: float,
+    launch_angle: float | None,
+    exit_velocity_threshold: float,
+) -> bool:
     if launch_angle is None:
         return False
-    return exit_velocity >= 95 and 8 <= launch_angle <= 32
+    return exit_velocity >= exit_velocity_threshold and 8 <= launch_angle <= 32
 
 
 def _win_probability_plays(feed: JsonDict) -> list[JsonDict]:

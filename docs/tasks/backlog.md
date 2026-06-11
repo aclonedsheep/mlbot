@@ -264,6 +264,20 @@ checkout did not contain the backlog file.
 - Live check gap: immediate post-deploy logs had no fresh barrel alert to judge
   in `#mlbtest`.
 
+### TASK-075 - Raise Barrel Alert EV Threshold
+
+- Status: Local checks pass; deployment pending.
+- Goal: make barrel alerts fire only for special hard-hit balls instead of
+  routine 95+ mph sweet-spot contact.
+- Result: barrel detection now requires the configured hard-hit exit-velocity
+  threshold, `MLB_ALERT_HARD_HIT_THRESHOLD_MPH`, in addition to the launch-angle
+  window. With the default threshold, a barrel alert only fires at 110+ mph and
+  8-32 degrees, and custom hard-hit thresholds also control barrel eligibility.
+- Verification: focused alert and scheduler regressions pass; `pytest` passes
+  with 65 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
+  passes; `git diff --check` passes.
+- Deployment: pending after the implementation commit.
+
 ## Next Candidates
 
 - Watch a naturally firing barrel or overlapping-play alert in `#mlbtest` and

@@ -356,6 +356,68 @@ def test_batted_ball_alerts_include_hitter_when_result_text_is_generic() -> None
     )
 
 
+def test_barrel_alerts_require_hard_hit_exit_velocity() -> None:
+    feed = {
+        "gamePk": 777,
+        "liveData": {
+            "plays": {
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 31},
+                        "result": {"event": "Double", "eventType": "double"},
+                        "matchup": {"batter": {"fullName": "Cal Raleigh"}},
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 100.0,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 330.0,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed)
+
+    assert [alert.alert_type for alert in alerts] == []
+
+
+def test_barrel_alerts_follow_configured_hard_hit_threshold() -> None:
+    feed = {
+        "gamePk": 777,
+        "liveData": {
+            "plays": {
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 31},
+                        "result": {"event": "Double", "eventType": "double"},
+                        "matchup": {"batter": {"fullName": "Cal Raleigh"}},
+                        "playEvents": [
+                            {
+                                "playId": "bbe-1",
+                                "hitData": {
+                                    "launchSpeed": 111.2,
+                                    "launchAngle": 24.0,
+                                    "totalDistance": 390.0,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+        },
+    }
+
+    alerts = collect_alerts(feed, hard_hit_threshold_mph=112.0)
+
+    assert [alert.alert_type for alert in alerts] == []
+
+
 def test_consolidate_alerts_combines_overlapping_play_alerts() -> None:
     feed = {
         "gamePk": 777,

@@ -1,5 +1,32 @@
 # Project Memory
 
+## 2026-06-11 - TASK-075: Raise Barrel Alert EV Threshold
+
+- Goal: make barrel alerts fire only for special hard-hit balls by requiring
+  the configured hard-hit exit-velocity threshold in addition to the launch
+  angle window.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-074 deployment-record commit `74cf518`; deployed app code is documented
+  at `101b79bcba88ef6f44fc38938f1da1349d1e2bca`.
+- Planned changes: change barrel detection to require
+  `MLB_ALERT_HARD_HIT_THRESHOLD_MPH` instead of the old fixed 95 mph floor, add
+  regressions for below-threshold sweet-spot contact and configurable threshold
+  behavior, run local checks, update backlog/memory, commit, deploy, and verify
+  the container.
+- Changes: barrel detection now requires the configured hard-hit EV threshold
+  in addition to the 8-32 degree launch-angle window. With the default 110 mph
+  threshold, 95-109 mph sweet-spot contact no longer triggers barrel or
+  hard-hit alerts; raising `MLB_ALERT_HARD_HIT_THRESHOLD_MPH` also raises the
+  barrel EV floor.
+- Verification: focused alert/scheduler tests pass; `.\.venv\Scripts\python -m
+  pytest -q -o cache_dir=.tmp\pytest-cache --basetemp=.tmp\pytest-basetemp`
+  passes with 65 tests and known dependency deprecation warnings;
+  `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
+  mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
+  Windows line-ending warnings.
+- Pending: implementation commit, deploy, post-deploy container health check,
+  and final handoff update.
+
 ## 2026-06-11 - TASK-074: Include Hitters In Barrel Alerts
 
 - Goal: fix barrel and hard-hit alerts that can omit the hitter's name when MLB
