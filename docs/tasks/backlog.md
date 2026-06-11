@@ -289,7 +289,7 @@ checkout did not contain the backlog file.
 
 ### TASK-076 - Add High-Leverage Situation Context
 
-- Status: Local checks pass; deployment pending.
+- Status: Done.
 - Goal: make high-leverage alerts explain why a plate appearance is tense,
   rather than only printing the LI value.
 - Result: high-leverage alerts now append compact situation context when MLB
@@ -299,7 +299,16 @@ checkout did not contain the backlog file.
 - Verification: focused alert and scheduler regressions pass; `pytest` passes
   with 66 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run`
   passes.
-- Deployment: pending after the implementation commit.
+- Deployment: pushed and deployed `08b2412` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot` from `f5a2d1b` to `08b2412`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `08b24127f9f6bd4d3aca8bfac7a67c32886c2f9e`; Docker reported
+  `mlbot-mlb-irc-bot-1` running with `restarts=0`.
+- Live check gap: immediate post-deploy logs showed only expected first-poll
+  suppression for existing game alerts, and an extra 90-second log window
+  produced no fresh natural high-leverage alert to judge in `#mlbtest`.
 
 ## Next Candidates
 

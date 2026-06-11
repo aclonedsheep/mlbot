@@ -22,8 +22,25 @@
   passes with 66 tests and known dependency deprecation warnings;
   `.\.venv\Scripts\python -m ruff check .` passes; `.\.venv\Scripts\python -m
   mlb_irc_bot --dry-run` passes.
-- Pending: implementation commit, deployment, post-deploy container health
-  check, and live-alert observation if a natural high-leverage event occurs.
+- Commit: `08b24127f9f6bd4d3aca8bfac7a67c32886c2f9e`
+  (`[TASK-076] Add high leverage situation context`).
+- Deployment: pushed and deployed `08b2412` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  deploy fast-forwarded `/home/wolfb/mlbot` from `f5a2d1b` to `08b2412`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `08b24127f9f6bd4d3aca8bfac7a67c32886c2f9e`; `docker inspect` reported
+  `status=running running=true restarts=0
+  started=2026-06-11T18:59:47.003528094Z`; `docker compose ps` showed
+  `mlbot-mlb-irc-bot-1` up.
+- Live check gap: immediate post-deploy logs showed only expected first-poll
+  suppression for existing game alerts, and an extra 90-second log window
+  produced no fresh natural high-leverage alert to judge in `#mlbtest`.
+- Resume prompt: Continue after TASK-076; high-leverage alerts now explain the
+  tense situation with compact score/base/outs context when MLB exposes it,
+  implementation commit `08b2412` is deployed, and the local deployment-record
+  commit is the latest handoff checkpoint.
 
 ## 2026-06-11 - TASK-075: Raise Barrel Alert EV Threshold
 
