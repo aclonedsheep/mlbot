@@ -12,6 +12,9 @@ score alerts keep their natural formats.
 
 - Home runs, including exit velocity, launch angle, and Baseball Savant
   MLB park percentage/count when those fields are available.
+- If Baseball Savant has not published park-count data by the first live home
+  run alert, the bot keeps retrying and sends one compact `HR parks` follow-up
+  after the original HR has been posted.
 - Scoring plays and run-scoring state changes.
 - Home run scoring plays are posted as home run alerts only, not duplicate scoring alerts.
 - Tied games, go-ahead or lead-change scoring plays, and walk-offs.

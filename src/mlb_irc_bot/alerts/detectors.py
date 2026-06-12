@@ -39,6 +39,7 @@ def collect_alerts(
     alerts.extend(_scoring_alerts(feed))
     alerts.extend(_scoring_state_alerts(feed))
     alerts.extend(_home_run_alerts(feed))
+    alerts.extend(_home_run_park_alerts(feed))
     alerts.extend(_win_probability_alerts(feed, win_probability_threshold))
     alerts.extend(_high_leverage_alerts(feed, high_leverage_threshold))
     alerts.extend(_batted_ball_alerts(feed, hard_hit_threshold_mph))
@@ -252,6 +253,49 @@ def _home_run_alert(
             f"{description}{context}{detail_text}"
         ),
     )
+
+
+def _home_run_park_alerts(feed: JsonDict) -> list[Alert]:
+    game_pk = _game_pk(feed)
+    alerts = []
+    for index, play in enumerate(_all_plays(feed)):
+        if not _is_home_run_play(play):
+            continue
+        parks = _home_run_park_count(play)
+        if parks is None:
+            continue
+        at_bat = (play.get("about") or {}).get("atBatIndex", index)
+        key = f"{game_pk}:hr_parks:{at_bat}"
+        original_key = f"{game_pk}:hr:{at_bat}"
+        batter = _person_name((play.get("matchup") or {}).get("batter")) or "Home run"
+        distance = _home_run_distance(play)
+        distance_text = (
+            f" | Dist {irc.value(_format_number(distance))} ft"
+            if distance is not None
+            else ""
+        )
+        result = play.get("result") or {}
+        away_score = _first_int(result.get("awayScore"), result.get("away_score"))
+        home_score = _first_int(result.get("homeScore"), result.get("home_score"))
+        score_context = (
+            _play_score_context(feed, play, away_score, home_score)
+            if away_score is not None and home_score is not None
+            else ""
+        )
+        alerts.append(
+            Alert(
+                key=key,
+                alert_type="home_run_parks",
+                game_pk=game_pk,
+                requires_seen_key=original_key,
+                message=(
+                    f"{_alert_label('HR parks', irc.IRCColor.ORANGE)}: "
+                    f"{irc.bold(batter)} {_home_run_park_value(parks)}"
+                    f"{distance_text}{score_context}"
+                ),
+            )
+        )
+    return alerts
 
 
 def _is_home_run_play(play: JsonDict) -> bool:
@@ -662,22 +706,8 @@ def _home_run_details(play: JsonDict) -> str:
         advanced.get("launchAngle"),
         advanced.get("launch_angle"),
     )
-    distance = _first_float(
-        hit_data.get("totalDistance"),
-        advanced.get("distance"),
-        advanced.get("hrDistance"),
-        advanced.get("hr_distance"),
-    )
-    parks = _first_int(
-        advanced.get("parks"),
-        advanced.get("parkCount"),
-        advanced.get("park_count"),
-        advanced.get("ct"),
-    )
-    if parks is None:
-        other_parks = _first_int(advanced.get("otherParks"), advanced.get("other_parks"))
-        if other_parks is not None:
-            parks = other_parks + 1
+    distance = _home_run_distance(play)
+    parks = _home_run_park_count(play)
 
     parts = []
     if exit_velocity is not None:
@@ -687,10 +717,39 @@ def _home_run_details(play: JsonDict) -> str:
     if distance is not None:
         parts.append(f"Dist {irc.value(_format_number(distance))} ft")
     if parks is not None:
-        park_percent = parks / MLB_PARK_COUNT * 100
-        park_text = f"{_format_percent(park_percent)} ({parks}/{MLB_PARK_COUNT})"
-        parts.append(f"HR parks {irc.value(park_text)}")
+        parts.append(f"HR parks {_home_run_park_value(parks)}")
     return ", ".join(parts)
+
+
+def _home_run_distance(play: JsonDict) -> float | None:
+    advanced = play.get("homeRunData") or play.get("homeRunDetails") or {}
+    hit_data = _batted_ball_hit_data(play)
+    return _first_float(
+        hit_data.get("totalDistance"),
+        advanced.get("distance"),
+        advanced.get("hrDistance"),
+        advanced.get("hr_distance"),
+    )
+
+
+def _home_run_park_count(play: JsonDict) -> int | None:
+    advanced = play.get("homeRunData") or play.get("homeRunDetails") or {}
+    parks = _first_int(
+        advanced.get("parks"),
+        advanced.get("parkCount"),
+        advanced.get("park_count"),
+        advanced.get("ct"),
+    )
+    if parks is not None:
+        return parks
+    other_parks = _first_int(advanced.get("otherParks"), advanced.get("other_parks"))
+    return None if other_parks is None else other_parks + 1
+
+
+def _home_run_park_value(parks: int) -> str:
+    park_percent = parks / MLB_PARK_COUNT * 100
+    park_text = f"{_format_percent(park_percent)} ({parks}/{MLB_PARK_COUNT})"
+    return irc.value(park_text)
 
 
 def _batted_ball_hit_data(play: JsonDict) -> JsonDict:

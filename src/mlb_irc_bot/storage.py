@@ -30,6 +30,15 @@ class AlertStore:
             row = await cursor.fetchone()
             return row is not None
 
+    async def message_for(self, alert_key: str) -> str | None:
+        async with aiosqlite.connect(self.path) as db:
+            cursor = await db.execute(
+                "SELECT message FROM sent_alerts WHERE alert_key = ?",
+                (alert_key,),
+            )
+            row = await cursor.fetchone()
+            return None if row is None else str(row[0])
+
     async def mark_sent(
         self,
         *,

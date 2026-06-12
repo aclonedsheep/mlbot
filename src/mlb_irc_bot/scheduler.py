@@ -136,6 +136,8 @@ class LiveScheduler:
     async def _eligible_alerts(self, alerts: list[Alert]) -> list[Alert]:
         eligible_alerts = []
         for alert in alerts:
+            if not await self._required_seen_alert_is_available(alert):
+                continue
             if alert.key in self._suppressed_alert_keys:
                 continue
             if alert.group_key and alert.group_key in self._suppressed_alert_keys:
@@ -148,6 +150,16 @@ class LiveScheduler:
                 continue
             eligible_alerts.append(alert)
         return eligible_alerts
+
+    async def _required_seen_alert_is_available(self, alert: Alert) -> bool:
+        if not alert.requires_seen_key:
+            return True
+        message = await self.store.message_for(alert.requires_seen_key)
+        if message is None:
+            return False
+        if alert.alert_type == "home_run_parks" and "HR parks" in message:
+            return False
+        return True
 
     async def _send_once(self, alert: AlertBatch) -> None:
         await self.send_alert(alert.message)
@@ -166,6 +178,7 @@ class LiveScheduler:
     def _enabled(self, alert_type: str) -> bool:
         return {
             "home_run": self.settings.enable_alert_home_runs,
+            "home_run_parks": self.settings.enable_alert_home_runs,
             "scoring": self.settings.enable_alert_scoring,
             "bases_loaded": self.settings.enable_alert_bases_loaded,
             "final": self.settings.enable_alert_finals,

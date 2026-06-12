@@ -9,6 +9,7 @@ class Alert:
     game_pk: int | None
     message: str
     group_key: str | None = None
+    requires_seen_key: str | None = None
     priority: int = 100
     detail_order: int | None = None
     detail_key: str | None = None

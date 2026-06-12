@@ -1,5 +1,39 @@
 # Project Memory
 
+## 2026-06-11 - TASK-078: Retry HR Park Details
+
+- Goal: fix live home run alerts missing `HR parks` because Baseball Savant's
+  park-count data can lag the MLB live feed during active games.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-077 deployment-record commit `9e33efd`; deployed app code is
+  `c98ef06f7a27c5492edc4e6ae89675326b5b3062`. The remote alert store showed
+  recent home run messages for game `823371`, including Rafael Flores Jr.,
+  with EV/LA/distance but no park count.
+- Findings: replaying game `823371` locally reproduced the missing park data;
+  MLB live feed exposes batted-ball play ids immediately, but the Savant
+  `/leaderboard/home-runs?cat=xhr` rows and per-play video pages were not yet
+  populated for the active-game HRs.
+- Planned changes: add a deferred `HR parks` follow-up alert that retries
+  Savant enrichment on later polls, only sends after the original HR alert was
+  recorded, and skips itself if the original message already included the park
+  count.
+- Changes: added a standalone `home_run_parks` alert generated when Savant park
+  data becomes available after the original HR. The scheduler now supports
+  alerts gated on a previously recorded alert key, checks the original message
+  so HRs that already included `HR parks` do not get a duplicate follow-up, and
+  ties the follow-up to the existing home-run alert toggle.
+- Verification: focused scheduler/storage/detector regressions pass;
+  `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\pytest-cache
+  --basetemp=.tmp\pytest-basetemp` passes with 69 tests and known dependency
+  deprecation warnings; `.\.venv\Scripts\python -m ruff check .` passes;
+  `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff --check`
+  passes with only expected Windows line-ending warnings.
+- Deployment: pending.
+- Commit: pending.
+- Resume prompt: Continue after TASK-078 local verification; live HR alerts now
+  stay immediate and a delayed `HR parks: Player 80% (24/30)` follow-up is
+  queued by normal polling once Savant catches up. Deployment is still pending.
+
 ## 2026-06-11 - TASK-077: Show HR Park Percentage
 
 - Goal: make home run alerts show what percentage of MLB parks the batted ball

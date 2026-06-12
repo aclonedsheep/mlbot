@@ -334,6 +334,27 @@ checkout did not contain the backlog file.
   the exact label still needs a real `#mlbtest` watch if it feels worth judging
   in-channel.
 
+### TASK-078 - Retry HR Park Details
+
+- Status: Done.
+- Goal: fix live home run alerts missing `HR parks` because Baseball Savant's
+  park-count data can lag the MLB live feed during active games.
+- Finding: the remote alert store showed recent home run messages for game
+  `823371`, including Rafael Flores Jr., with EV/LA/distance but no park
+  count. Replaying that game locally reproduced the missing data: MLB live feed
+  had batted-ball play ids immediately, while Savant's `cat=xhr` leaderboard
+  and per-play video/gamefeed pages were not yet populated for the active-game
+  homers.
+- Result: the bot now keeps the first HR alert timely, then sends one compact
+  deferred `HR parks` follow-up after Savant enrichment catches up. Follow-ups
+  only send after the original HR alert is recorded, and they skip themselves
+  when the original HR message already included the park count.
+- Verification: focused scheduler/storage/detector regressions pass; `pytest`
+  passes with 69 tests; `ruff check .` passes; `python -m mlb_irc_bot
+  --dry-run` passes; `git diff --check` passes with only expected Windows
+  line-ending warnings.
+- Deployment: pending.
+
 ## Next Candidates
 
 - Watch a naturally firing barrel or overlapping-play alert in `#mlbtest` and

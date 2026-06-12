@@ -18,3 +18,5 @@ async def test_alert_store_marks_seen(tmp_path) -> None:
     )
 
     assert await store.seen("game:alert")
+    assert await store.message_for("game:alert") == "HR"
+    assert await store.message_for("game:missing") is None

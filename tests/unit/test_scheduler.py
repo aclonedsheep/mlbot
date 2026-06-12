@@ -254,6 +254,63 @@ async def test_scheduler_suppresses_existing_alerts_for_live_game_on_first_poll(
     assert store.sent_keys == []
 
 
+@pytest.mark.asyncio
+async def test_scheduler_sends_deferred_home_run_park_followup() -> None:
+    game = _game_summary()
+    raw = _home_run_raw(game.game_pk)
+    client = FakeClient(game, raw_by_game={game.game_pk: raw})
+    store = FakeStore()
+    sent_messages: list[str] = []
+    scheduler = LiveScheduler(
+        client=client,
+        store=store,
+        settings=settings(near_start_poll_seconds=0),
+        send_alert=_capture(sent_messages),
+    )
+
+    await scheduler.poll_once()
+    raw["liveData"]["plays"]["allPlays"][0]["homeRunData"] = {"parks": 24}
+    await scheduler.poll_once()
+    await scheduler.poll_once()
+
+    assert len(sent_messages) == 2
+    assert strip_irc_formatting(sent_messages[0]) == (
+        "HR: Rafael Flores Jr. homers on a fly ball to center field. | "
+        "EV 108.7 mph, LA 26 deg, Dist 440 ft"
+    )
+    assert strip_irc_formatting(sent_messages[1]) == (
+        "HR parks: Rafael Flores Jr. 80% (24/30) | Dist 440 ft | "
+        "TOR 1, BAL 0 | Top 3"
+    )
+    assert store.sent_keys.count("123:hr_parks:5") == 1
+
+
+@pytest.mark.asyncio
+async def test_scheduler_skips_home_run_park_followup_when_original_had_parks() -> None:
+    game = _game_summary()
+    raw = _home_run_raw(game.game_pk, parks=24)
+    client = FakeClient(game, raw_by_game={game.game_pk: raw})
+    store = FakeStore()
+    sent_messages: list[str] = []
+    scheduler = LiveScheduler(
+        client=client,
+        store=store,
+        settings=settings(near_start_poll_seconds=0),
+        send_alert=_capture(sent_messages),
+    )
+
+    await scheduler.poll_once()
+    await scheduler.poll_once()
+
+    assert len(sent_messages) == 1
+    assert strip_irc_formatting(sent_messages[0]) == (
+        "HR: Rafael Flores Jr. homers on a fly ball to center field. | "
+        "EV 108.7 mph, LA 26 deg, Dist 440 ft, "
+        "HR parks 80% (24/30)"
+    )
+    assert "123:hr_parks:5" not in store.sent_keys
+
+
 class FakeClient:
     def __init__(
         self,
@@ -301,9 +358,13 @@ class FakeClient:
 class FakeStore:
     def __init__(self) -> None:
         self.sent_keys: list[str] = []
+        self.messages: dict[str, str] = {}
 
     async def seen(self, alert_key: str) -> bool:
         return alert_key in self.sent_keys
+
+    async def message_for(self, alert_key: str) -> str | None:
+        return self.messages.get(alert_key)
 
     async def mark_sent(
         self,
@@ -314,6 +375,7 @@ class FakeStore:
         message: str,
     ) -> None:
         self.sent_keys.append(alert_key)
+        self.messages.setdefault(alert_key, message)
 
 
 def _capture(messages: list[str]):
@@ -323,30 +385,32 @@ def _capture(messages: list[str]):
     return send_alert
 
 
-def settings() -> SimpleNamespace:
-    return SimpleNamespace(
-        zoneinfo=lambda: ZoneInfo("UTC"),
-        schedule_poll_seconds=300,
-        active_game_poll_seconds=15,
-        near_start_poll_seconds=60,
-        alert_hard_hit_threshold_mph=110.0,
-        alert_win_probability_threshold=15.0,
-        alert_high_leverage_threshold=2.5,
-        enable_alert_home_runs=True,
-        enable_alert_scoring=True,
-        enable_alert_bases_loaded=True,
-        enable_alert_finals=True,
-        enable_alert_no_hitter=True,
-        enable_alert_immaculate=True,
-        enable_alert_cycle=True,
-        enable_alert_win_probability=True,
-        enable_alert_high_leverage=True,
-        enable_alert_hard_hit=True,
-        enable_alert_barrel=True,
-        enable_alert_late_threat=True,
-        enable_alert_weather=True,
-        enable_alert_lead_changes=True,
-    )
+def settings(**overrides) -> SimpleNamespace:
+    values = {
+        "zoneinfo": lambda: ZoneInfo("UTC"),
+        "schedule_poll_seconds": 300,
+        "active_game_poll_seconds": 15,
+        "near_start_poll_seconds": 60,
+        "alert_hard_hit_threshold_mph": 110.0,
+        "alert_win_probability_threshold": 15.0,
+        "alert_high_leverage_threshold": 2.5,
+        "enable_alert_home_runs": True,
+        "enable_alert_scoring": True,
+        "enable_alert_bases_loaded": True,
+        "enable_alert_finals": True,
+        "enable_alert_no_hitter": True,
+        "enable_alert_immaculate": True,
+        "enable_alert_cycle": True,
+        "enable_alert_win_probability": True,
+        "enable_alert_high_leverage": True,
+        "enable_alert_hard_hit": True,
+        "enable_alert_barrel": True,
+        "enable_alert_late_threat": True,
+        "enable_alert_weather": True,
+        "enable_alert_lead_changes": True,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
 
 
 def _game_summary(
@@ -367,3 +431,45 @@ def _game_summary(
         away=TeamInfo(id=141, name="Toronto Blue Jays", abbreviation="TOR"),
         home=TeamInfo(id=110, name="Baltimore Orioles", abbreviation="BAL"),
     )
+
+
+def _home_run_raw(game_pk: int, parks: int | None = None) -> dict:
+    play = {
+        "about": {
+            "atBatIndex": 5,
+            "inning": 3,
+            "halfInning": "top",
+            "isTopInning": True,
+        },
+        "result": {
+            "event": "Home Run",
+            "eventType": "home_run",
+            "description": "Rafael Flores Jr. homers on a fly ball to center field.",
+            "awayScore": 1,
+            "homeScore": 0,
+        },
+        "matchup": {"batter": {"fullName": "Rafael Flores Jr."}},
+        "playEvents": [
+            {
+                "playId": "hr-play",
+                "hitData": {
+                    "launchSpeed": 108.7,
+                    "launchAngle": 26.0,
+                    "totalDistance": 440.0,
+                },
+            }
+        ],
+    }
+    if parks is not None:
+        play["homeRunData"] = {"parks": parks}
+    return {
+        "gamePk": game_pk,
+        "gameData": {
+            "game": {"pk": game_pk},
+            "teams": {
+                "away": {"id": 141, "abbreviation": "TOR"},
+                "home": {"id": 110, "abbreviation": "BAL"},
+            },
+        },
+        "liveData": {"plays": {"allPlays": [play]}},
+    }
