@@ -19,6 +19,7 @@ DETAIL_WIN_PROBABILITY = 20
 DETAIL_HIGH_LEVERAGE = 30
 DETAIL_BARREL = 40
 DETAIL_HARD_HIT = 50
+MLB_PARK_COUNT = 30
 BASES: tuple[tuple[str, str], ...] = (
     ("first", "1B"),
     ("second", "2B"),
@@ -667,16 +668,16 @@ def _home_run_details(play: JsonDict) -> str:
         advanced.get("hrDistance"),
         advanced.get("hr_distance"),
     )
-    other_parks = _first_int(advanced.get("otherParks"), advanced.get("other_parks"))
-    if other_parks is None:
-        parks = _first_int(
-            advanced.get("parks"),
-            advanced.get("parkCount"),
-            advanced.get("park_count"),
-            advanced.get("ct"),
-        )
-        if parks is not None:
-            other_parks = max(parks - 1, 0)
+    parks = _first_int(
+        advanced.get("parks"),
+        advanced.get("parkCount"),
+        advanced.get("park_count"),
+        advanced.get("ct"),
+    )
+    if parks is None:
+        other_parks = _first_int(advanced.get("otherParks"), advanced.get("other_parks"))
+        if other_parks is not None:
+            parks = other_parks + 1
 
     parts = []
     if exit_velocity is not None:
@@ -685,8 +686,10 @@ def _home_run_details(play: JsonDict) -> str:
         parts.append(f"LA {irc.value(_format_number(launch_angle))} deg")
     if distance is not None:
         parts.append(f"Dist {irc.value(_format_number(distance))} ft")
-    if other_parks is not None:
-        parts.append(f"Other parks {irc.value(f'{other_parks}/29')}")
+    if parks is not None:
+        park_percent = parks / MLB_PARK_COUNT * 100
+        park_text = f"{_format_percent(park_percent)} ({parks}/{MLB_PARK_COUNT})"
+        parts.append(f"HR parks {irc.value(park_text)}")
     return ", ".join(parts)
 
 

@@ -125,7 +125,7 @@ def test_collect_alerts_detects_live_events() -> None:
     assert (
         strip_irc_formatting(alerts_by_type["home_run"].message)
         == "HR: Mookie Betts homers. | LAD 4, NYY 0 | Top 6, 1 out | "
-        "EV 105.5 mph, LA 28 deg, Dist 412 ft, Other parks 23/29"
+        "EV 105.5 mph, LA 28 deg, Dist 412 ft, HR parks 80% (24/30)"
     )
     assert (
         strip_irc_formatting(alerts_by_type["scoring"].message)
@@ -169,6 +169,35 @@ def test_home_run_scoring_play_is_only_a_home_run_alert() -> None:
     assert [alert.alert_type for alert in alerts] == ["home_run"]
     assert alerts[0].key == "999:hr:10"
     assert strip_irc_formatting(alerts[0].message) == "HR: Mookie Betts homers."
+
+
+def test_home_run_park_percentage_can_use_other_park_count() -> None:
+    feed = {
+        "gameData": {"game": {"pk": 999}},
+        "liveData": {
+            "plays": {
+                "scoringPlays": [0],
+                "allPlays": [
+                    {
+                        "about": {"atBatIndex": 10},
+                        "result": {
+                            "event": "Home Run",
+                            "eventType": "home_run",
+                            "description": "Mookie Betts homers.",
+                        },
+                        "matchup": {"batter": {"fullName": "Mookie Betts"}},
+                        "homeRunData": {"otherParks": 14},
+                    }
+                ],
+            }
+        },
+    }
+
+    alerts = collect_alerts(feed)
+
+    assert strip_irc_formatting(alerts[0].message) == (
+        "HR: Mookie Betts homers. | HR parks 50% (15/30)"
+    )
 
 
 def test_bases_loaded_alert_uses_next_batter_when_linescore_batter_is_runner() -> None:

@@ -310,11 +310,28 @@ checkout did not contain the backlog file.
   suppression for existing game alerts, and an extra 90-second log window
   produced no fresh natural high-leverage alert to judge in `#mlbtest`.
 
+### TASK-077 - Show HR Park Percentage
+
+- Status: Done.
+- Goal: make home run alerts show the percentage of MLB parks where the batted
+  ball would have been a homer, not only the old other-park count.
+- Result: home run details now render the Baseball Savant park count as a
+  compact total-park percentage and raw count, for example
+  `HR parks 80% (24/30)`. The formatter uses Savant's total `parks`/`ct` value
+  when present and falls back from `otherParks` by adding the actual home-run
+  park back into the 30-park denominator.
+- Verification: focused alert detector regressions pass; `pytest` passes with
+  67 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes;
+  `git diff --check` passes with only expected Windows line-ending warnings.
+- Deployment: pending.
+
 ## Next Candidates
 
 - Watch a naturally firing barrel or overlapping-play alert in `#mlbtest` and
   make only narrow formatting tweaks if the consolidated suffix feels noisy
   in-channel.
+- Watch a naturally firing home run alert in `#mlbtest` after deploy and tune
+  the `HR parks` label only if the line feels unclear in real IRC.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after
   deployment to judge IRC readability and confirm `@highlights` returns MP4
   URLs in-channel.

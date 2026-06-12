@@ -11,7 +11,7 @@ score alerts keep their natural formats.
 ## Alert Types
 
 - Home runs, including exit velocity, launch angle, and Baseball Savant
-  other-park count when those fields are available.
+  MLB park percentage/count when those fields are available.
 - Scoring plays and run-scoring state changes.
 - Home run scoring plays are posted as home run alerts only, not duplicate scoring alerts.
 - Tied games, go-ahead or lead-change scoring plays, and walk-offs.

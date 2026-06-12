@@ -1,5 +1,33 @@
 # Project Memory
 
+## 2026-06-11 - TASK-077: Show HR Park Percentage
+
+- Goal: make home run alerts show what percentage of MLB parks the batted ball
+  would have been a homer in, instead of only showing the other-park count.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-076 deployment-record commit `48bd77b`; deployed app code is documented
+  at `08b24127f9f6bd4d3aca8bfac7a67c32886c2f9e`.
+- Planned changes: relabel the existing Baseball Savant park-count detail as a
+  total MLB park percentage plus raw count, keep the alert compact, update
+  detector/docs tests, run local checks, and update the backlog/memory before
+  committing.
+- Changes: home run details now render the Baseball Savant park count as a
+  compact total-park percentage and raw count, for example
+  `HR parks 80% (24/30)`. The formatter prefers the total `parks`/`ct` count
+  and falls back from `otherParks` by adding the actual home-run park back into
+  the 30-park denominator.
+- Verification: focused alert detector regressions pass;
+  `.\.venv\Scripts\python -m pytest -q -o cache_dir=.tmp\pytest-cache
+  --basetemp=.tmp\pytest-basetemp` passes with 67 tests and known dependency
+  deprecation warnings; `.\.venv\Scripts\python -m ruff check .` passes;
+  `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff --check`
+  passes with only expected Windows line-ending warnings.
+- Deployment: pending.
+- Commit: pending.
+- Resume prompt: Continue after TASK-077 local verification; HR alerts now
+  label Savant park reach as `HR parks 80% (24/30)`-style percentage/count
+  text, but deployment is still pending.
+
 ## 2026-06-11 - TASK-076: Add High-Leverage Situation Context
 
 - Goal: make high-leverage alerts explain why the plate appearance is high
