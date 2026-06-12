@@ -353,7 +353,17 @@ checkout did not contain the backlog file.
   passes with 69 tests; `ruff check .` passes; `python -m mlb_irc_bot
   --dry-run` passes; `git diff --check` passes with only expected Windows
   line-ending warnings.
-- Deployment: pending.
+- Deployment: pushed and deployed `4e077b0` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot` from `c98ef06` to `4e077b0`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `4e077b00e03d125641873d222d2ad6594d48c940`; Docker reported
+  `mlbot-mlb-irc-bot-1` running with `restarts=0`.
+- Live check gap: Savant still had not provided a live park-count row for the
+  Rafael Flores Jr. homer during investigation, so the new deferred path is
+  deployed and waiting on normal polling to send a follow-up only after Savant
+  catches up.
 
 ## Next Candidates
 
@@ -362,6 +372,8 @@ checkout did not contain the backlog file.
   in-channel.
 - Watch a naturally firing home run alert in `#mlbtest` after deploy and tune
   the `HR parks` label only if the line feels unclear in real IRC.
+- Watch for a deferred `HR parks` follow-up in `#mlbtest` when Savant catches
+  up on a homer that first arrived without park-count data.
 - Run a live `@preview`, `@highlights`, and expanded-split command sweep after
   deployment to judge IRC readability and confirm `@highlights` returns MP4
   URLs in-channel.

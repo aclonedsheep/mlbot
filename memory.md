@@ -28,11 +28,27 @@
   deprecation warnings; `.\.venv\Scripts\python -m ruff check .` passes;
   `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff --check`
   passes with only expected Windows line-ending warnings.
-- Deployment: pending.
-- Commit: pending.
-- Resume prompt: Continue after TASK-078 local verification; live HR alerts now
-  stay immediate and a delayed `HR parks: Player 80% (24/30)` follow-up is
-  queued by normal polling once Savant catches up. Deployment is still pending.
+- Commit: `4e077b00e03d125641873d222d2ad6594d48c940`
+  (`[TASK-078] Retry HR park details`).
+- Deployment: pushed and deployed `4e077b0` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  deploy fast-forwarded `/home/wolfb/mlbot` from `c98ef06` to `4e077b0`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `4e077b00e03d125641873d222d2ad6594d48c940`; `docker compose ps` showed
+  `mlbot-mlb-irc-bot-1` up; `docker inspect` reported `status=running
+  running=true restarts=0 started=2026-06-12T00:28:49.958071314Z`.
+- Live check gap: Savant still had not provided a live park-count row for the
+  Rafael Flores Jr. homer during investigation, so the new path is deployed and
+  waiting on normal polling to send a follow-up only after Savant catches up.
+- Resume prompt: Continue after TASK-078; live HR alerts now stay immediate and
+  a delayed `HR parks: Player 80% (24/30)` follow-up is queued by normal
+  polling once Savant catches up. The implementation is committed at
+  `4e077b0`, deployed on the VPS, and remote dry-run/container checks pass.
+  Next useful step is to watch `#mlbtest` for either a natural deferred HR park
+  follow-up or the next HR whose Savant data is ready in time for the first
+  alert.
 
 ## 2026-06-11 - TASK-077: Show HR Park Percentage
 
