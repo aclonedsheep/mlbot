@@ -35,6 +35,14 @@ from mlb_irc_bot.mlb.formatters import (
     format_player_stats,
     format_probable_pitchers,
     format_replay,
+    format_savant_arm_strength,
+    format_savant_baserunning_run_value,
+    format_savant_bat_tracking,
+    format_savant_expected_stats,
+    format_savant_fielding_run_value,
+    format_savant_percentiles,
+    format_savant_run_value,
+    format_savant_sprint_speed,
     format_standings,
     format_team_leaders,
     format_team_rankings,
@@ -195,6 +203,22 @@ class CommandRouter:
                 return await self._defense(args)
             if command == "arsenal":
                 return await self._arsenal(args)
+            if command in {"savant", "percentile", "percentiles"}:
+                return await self._savant_percentiles(args)
+            if command in {"xstat", "xstats"}:
+                return await self._savant_expected_stats(args)
+            if command in {"speed", "sprint"}:
+                return await self._savant_sprint_speed(args)
+            if command in {"bat", "battrack", "battracking"}:
+                return await self._savant_bat_tracking(args)
+            if command in {"runvalue", "rv"}:
+                return await self._savant_run_value(args)
+            if command in {"fieldrv", "fieldingrv", "frv"}:
+                return await self._savant_fielding_run_value(args)
+            if command in {"baserun", "baserunning", "brv"}:
+                return await self._savant_baserunning_run_value(args)
+            if command in {"arm", "armstrength"}:
+                return await self._savant_arm_strength(args)
             if command == "transactions":
                 return await self._transactions(args)
             if command == "highlights":
@@ -626,6 +650,93 @@ class CommandRouter:
         entries = await self.client.get_pitch_arsenal(player_or_reply, season=season)
         return [format_pitch_arsenal(player_or_reply.full_name, entries)]
 
+    async def _savant_percentiles(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "savant",
+            self.client.get_savant_percentiles,
+            format_savant_percentiles,
+        )
+
+    async def _savant_expected_stats(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "xstats",
+            self.client.get_savant_expected_stats,
+            format_savant_expected_stats,
+        )
+
+    async def _savant_sprint_speed(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "speed",
+            self.client.get_savant_sprint_speed,
+            format_savant_sprint_speed,
+        )
+
+    async def _savant_bat_tracking(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "bat",
+            self.client.get_savant_bat_tracking,
+            format_savant_bat_tracking,
+        )
+
+    async def _savant_run_value(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "runvalue",
+            self.client.get_savant_run_value,
+            format_savant_run_value,
+        )
+
+    async def _savant_fielding_run_value(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "fieldrv",
+            self.client.get_savant_fielding_run_value,
+            format_savant_fielding_run_value,
+        )
+
+    async def _savant_baserunning_run_value(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "baserun",
+            self.client.get_savant_baserunning_run_value,
+            format_savant_baserunning_run_value,
+        )
+
+    async def _savant_arm_strength(self, args: list[str]) -> list[str]:
+        return await self._savant_player_command(
+            args,
+            "arm",
+            self.client.get_savant_arm_strength,
+            format_savant_arm_strength,
+        )
+
+    async def _savant_player_command(
+        self,
+        args: list[str],
+        command_name: str,
+        fetcher,
+        formatter,
+    ) -> list[str]:
+        usage = (
+            f"{irc.warning('Usage')}: "
+            f"{irc.bold(f'{self.settings.command_prefix}{command_name}')} "
+            "<player name> [season]"
+        )
+        if not args:
+            return [usage]
+        season, remaining = _pop_optional_season(list(args), self.now().year)
+        if not remaining:
+            return [usage]
+        player_or_reply = await self._resolve_player(" ".join(remaining))
+        if isinstance(player_or_reply, str):
+            return [player_or_reply]
+        row = await fetcher(player_or_reply, season=season)
+        return [formatter(row)]
+
     async def _transactions(self, args: list[str]) -> list[str]:
         team: TeamRecord | None = None
         remaining = list(args)
@@ -839,6 +950,47 @@ class CommandRouter:
             return [f"{irc.bold(f'{prefix}defense')} <player name> [season]"]
         if topic == "arsenal":
             return [f"{irc.bold(f'{prefix}arsenal')} <player name> [season]"]
+        if topic in {"savant", "percentile", "percentiles"}:
+            return [
+                f"{irc.bold(f'{prefix}savant')} <player name> [season]: "
+                "Savant percentile snapshot; alias: "
+                f"{irc.bold(f'{prefix}percentiles')}"
+            ]
+        if topic in {"xstat", "xstats"}:
+            return [
+                f"{irc.bold(f'{prefix}xstats')} <player name> [season]: "
+                "Savant expected stats and batted-ball quality"
+            ]
+        if topic in {"speed", "sprint"}:
+            return [
+                f"{irc.bold(f'{prefix}speed')} <player name> [season]: "
+                "Savant sprint speed, bolts, and home-to-first when available"
+            ]
+        if topic in {"bat", "battrack", "battracking"}:
+            return [
+                f"{irc.bold(f'{prefix}bat')} <player name> [season]: "
+                "Savant bat tracking, swing speed, attack angle, and squared-up rate"
+            ]
+        if topic in {"runvalue", "rv"}:
+            return [
+                f"{irc.bold(f'{prefix}runvalue')} <player name> [season]: "
+                "Savant swing/take batting run value by zone"
+            ]
+        if topic in {"fieldrv", "fieldingrv", "frv"}:
+            return [
+                f"{irc.bold(f'{prefix}fieldrv')} <player name> [season]: "
+                "Savant fielding run value, range, arm, and related components"
+            ]
+        if topic in {"baserun", "baserunning", "brv"}:
+            return [
+                f"{irc.bold(f'{prefix}baserun')} <player name> [season]: "
+                "Savant baserunning run value"
+            ]
+        if topic in {"arm", "armstrength"}:
+            return [
+                f"{irc.bold(f'{prefix}arm')} <player name> [season]: "
+                "Savant arm strength"
+            ]
         if topic == "transactions":
             return [
                 f"{irc.bold(f'{prefix}transactions')} "
@@ -865,7 +1017,11 @@ class CommandRouter:
             f"{irc.bold(f'{prefix}gamelog')}, {irc.bold(f'{prefix}splits')}, "
             f"{irc.bold(f'{prefix}teamstats')}, {irc.bold(f'{prefix}teamrank')}, "
             f"{irc.bold(f'{prefix}teamleaders')}, {irc.bold(f'{prefix}leaders')}, "
-            f"{irc.bold(f'{prefix}defense')}, {irc.bold(f'{prefix}arsenal')} | "
+            f"{irc.bold(f'{prefix}defense')}, {irc.bold(f'{prefix}arsenal')}, "
+            f"{irc.bold(f'{prefix}savant')}, {irc.bold(f'{prefix}xstats')}, "
+            f"{irc.bold(f'{prefix}speed')}, {irc.bold(f'{prefix}bat')}, "
+            f"{irc.bold(f'{prefix}runvalue')}, {irc.bold(f'{prefix}fieldrv')}, "
+            f"{irc.bold(f'{prefix}baserun')}, {irc.bold(f'{prefix}arm')} | "
             f"{irc.section('other')}: {irc.bold(f'{prefix}transactions')}, "
             f"{irc.bold(f'{prefix}more')}, {irc.bold(f'{prefix}help <command>')}"
         ]

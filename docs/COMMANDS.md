@@ -89,6 +89,14 @@ Examples:
 - `@teamleaders TEAM [category] [limit]`: team leaders for one category, or a compact default set. Limit is capped at 5.
 - `@defense <player name> [season]`: defense stats such as Outs Above Average and fielding runs prevented when available.
 - `@arsenal <player name> [season]`: pitch mix, usage, average velocity, and counts.
+- `@savant <player name> [season]`: Baseball Savant percentile snapshot for key hitting, plate discipline, speed, and bat-speed indicators. Alias: `@percentiles`.
+- `@xstats <player name> [season]`: Savant expected stats and batted-ball quality, including xBA, xSLG, xwOBA, exit velocity, hard-hit, barrel, and sweet-spot rates.
+- `@speed <player name> [season]`: Savant sprint speed, bolts, home-to-first, and speed rank when available. Alias: `@sprint`.
+- `@bat <player name> [season]`: Savant bat tracking such as bat speed, attack angle, swing length, squared-up rate, ideal attack angle, and run value. Alias: `@battrack`.
+- `@runvalue <player name> [season]`: Savant swing/take batting run value by zone. Alias: `@rv`.
+- `@fieldrv <player name> [season]`: Savant fielding run value with range, arm, double-play, catching, framing, throwing, or blocking components when available. Aliases: `@fieldingrv`, `@frv`.
+- `@baserun <player name> [season]`: Savant baserunning run value, including steal and extra-base components when available. Aliases: `@baserunning`, `@brv`.
+- `@arm <player name> [season]`: Savant arm strength, max arm strength, throw count, and position when available. Alias: `@armstrength`.
 - `@transactions [TEAM] [today|yesterday|7 days|YYYY-MM-DD]`: recent MLB or team transactions.
 - `@leaders <category> [limit]`: stat leaders. Common aliases include `hr`, `rbi`, `ops`, `obp`, `slg`, `whip`, `k/9`, `k/bb`, `wRC+`, `WAR`, `FIP`, `xFIP`, and `xwOBA`. Limit is capped at 10.
 
@@ -112,6 +120,14 @@ Examples:
 @teamleaders TOR hr
 @defense Daulton Varsho
 @arsenal Tarik Skubal
+@savant Shohei Ohtani
+@xstats Aaron Judge
+@speed Bobby Witt Jr.
+@bat Juan Soto
+@runvalue Matt Olson
+@fieldrv Pete Crow-Armstrong
+@baserun Elly De La Cruz
+@arm Oneil Cruz
 @transactions
 @transactions TOR 7 days
 @leaders homeRuns 5

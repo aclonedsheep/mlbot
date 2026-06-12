@@ -12,6 +12,7 @@ from mlb_irc_bot.mlb.models import (
     PitchArsenalEntry,
     PitcherInfo,
     PlayerStats,
+    SavantLeaderboardRow,
     StandingTeam,
     TeamInfo,
     TeamLeaderGroup,
@@ -602,6 +603,204 @@ def format_defense(stats: PlayerStats) -> str:
     )
 
 
+def format_savant_percentiles(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = _percentile_stats(
+        stat,
+        (
+            ("percent_rank_xwoba", "xwOBA"),
+            ("percent_rank_xslg", "xSLG"),
+            ("percent_rank_exit_velocity_avg", "EV"),
+            ("percent_rank_hard_hit_percent", "HardHit"),
+            ("percent_rank_barrel", "Barrel"),
+            ("percent_rank_bb_percent", "BB"),
+            ("percent_rank_k_percent", "K"),
+            ("percent_rank_sprint_speed", "Sprint"),
+            ("percent_rank_swing_speed", "BatSpd"),
+        ),
+    )
+    return _format_savant_row(row, "Savant", bits)
+
+
+def format_savant_expected_stats(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = [
+        *_decimal_stats(
+            stat,
+            (
+                ("est_ba", "xBA"),
+                ("est_slg", "xSLG"),
+                ("est_woba", "xwOBA"),
+            ),
+        ),
+        *_speed_stats(
+            stat,
+            (
+                ("exit_velocity_avg", "EV"),
+                ("exit_velocity_max", "MaxEV"),
+            ),
+        ),
+        *_percent_stats(
+            stat,
+            (
+                ("hard_hit_percent", "HH"),
+                ("barrels_per_bip", "Brl/BIP"),
+                ("barrels_per_pa", "Brl/PA"),
+                ("sweet_spot_percent", "SweetSpot"),
+            ),
+        ),
+    ]
+    return _format_savant_row(row, "xStats", bits)
+
+
+def format_savant_sprint_speed(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = []
+    sprint = _first_value(stat, ("r_sprint_speed_top50percent_pretty",))
+    if sprint is None:
+        sprint = _format_number(_number_value(stat, "r_sprint_speed_top50percent"), 1)
+    if sprint:
+        bits.append(f"{irc.stat_label('Sprint')} {irc.stat_value(f'{sprint} ft/s')}")
+    bits.extend(
+        _labeled_stats(
+            stat,
+            (
+                ("n_bolts", "bolts"),
+                ("hp_to_1b", "HP-1B"),
+                ("speed_order", "rank"),
+            ),
+        )
+    )
+    return _format_savant_row(row, "Speed", bits)
+
+
+def format_savant_bat_tracking(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = [
+        *_speed_stats(
+            stat,
+            (
+                (("avg_swing_speed", "avg_sweetspot_speed_mph"), "BatSpd"),
+            ),
+        ),
+        *_angle_stats(
+            stat,
+            (
+                ("attack_angle", "Attack"),
+            ),
+        ),
+        *_distance_stats(stat, ((("swing_length", "swing_length_qualified"), "Length"),)),
+        *_percent_stats(
+            stat,
+            (
+                ("squared_up_per_bat_contact", "Squared"),
+                ("rate_ideal_attack_angle", "Ideal"),
+            ),
+        ),
+        *_run_value_stats(stat, (("delta_run_exp", "RV"),)),
+        *_labeled_stats(stat, (("count", "swings"),)),
+    ]
+    return _format_savant_row(row, "Bat", bits)
+
+
+def format_savant_run_value(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = [
+        *_run_value_stats(
+            stat,
+            (
+                ("runs_all", "RV"),
+                ("runs_heart", "heart"),
+                ("runs_shadow", "shadow"),
+                ("runs_chase", "chase"),
+                ("runs_waste", "waste"),
+            ),
+        ),
+        *_labeled_stats(stat, (("pa", "PA"), ("pitches", "pitches"))),
+    ]
+    return _format_savant_row(row, "RunValue", bits)
+
+
+def format_savant_fielding_run_value(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = [
+        *_run_value_stats(
+            stat,
+            (
+                ("total_runs", "RV"),
+                ("range_runs", "range"),
+                ("arm_runs", "arm"),
+                ("dp_runs", "DP"),
+                ("catching_runs", "catch"),
+                ("framing_runs", "frame"),
+                ("throwing_runs", "throw"),
+                ("blocking_runs", "block"),
+            ),
+        ),
+        *_labeled_stats(stat, (("outs_total", "outs"),)),
+    ]
+    return _format_savant_row(row, "FieldRV", bits)
+
+
+def format_savant_baserunning_run_value(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = [
+        *_run_value_stats(
+            stat,
+            (
+                ("runner_runs_tot", "RV"),
+                ("runner_runs_SBX", "steal"),
+                ("runner_runs_XB", "extra"),
+            ),
+        ),
+        *_labeled_stats(
+            stat,
+            (
+                ("N_runner_moved", "moved"),
+                ("N_runner_moved_XB", "extra att"),
+            ),
+        ),
+    ]
+    return _format_savant_row(row, "BaseRun", bits)
+
+
+def format_savant_arm_strength(row: SavantLeaderboardRow) -> str:
+    stat = row.stats
+    if not stat:
+        return _format_no_savant_row(row)
+    bits = [
+        *_speed_stats(
+            stat,
+            (
+                ("arm_overall", "Arm"),
+                ("max_arm_strength", "Max"),
+            ),
+        ),
+        *_labeled_stats(
+            stat,
+            (
+                ("total_throws", "throws"),
+                ("primary_pos_name_short", "pos"),
+            ),
+        ),
+    ]
+    return _format_savant_row(row, "Arm", bits)
+
+
 def format_transactions(
     transactions: list[Transaction],
     *,
@@ -860,6 +1059,87 @@ def _transaction_bit(transaction: Transaction) -> str:
         team_label = f"{team.abbreviation}: " if team else ""
         bit = f"{team_label}{transaction.player_name} {transaction.type_description}".strip()
     return _truncate_piece(bit, 105)
+
+
+def _format_savant_row(row: SavantLeaderboardRow, title: str, bits: list[str]) -> str:
+    if not bits:
+        return _format_no_savant_row(row)
+    return _truncate(
+        f"{irc.title(row.player.full_name)} {irc.value(str(row.season))} "
+        f"{irc.stat_label(title)}: " + ", ".join(bits)
+    )
+
+
+def _format_no_savant_row(row: SavantLeaderboardRow) -> str:
+    return (
+        f"{irc.muted('No Savant')} {row.leaderboard} row found for "
+        f"{irc.bold(row.player.full_name)} {irc.value(str(row.season))}."
+    )
+
+
+def _percentile_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(f"{irc.stat_label(label)} {irc.stat_value(_ordinal(value))}")
+    return bits
+
+
+def _decimal_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(f"{irc.stat_label(label)} {irc.stat_value(_format_decimal(value))}")
+    return bits
+
+
+def _speed_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(f"{irc.stat_label(label)} {irc.stat_value(f'{value:.1f} mph')}")
+    return bits
+
+
+def _angle_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(f"{irc.stat_label(label)} {irc.stat_value(f'{value:.1f} deg')}")
+    return bits
+
+
+def _distance_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(f"{irc.stat_label(label)} {irc.stat_value(f'{value:.1f} ft')}")
+    return bits
+
+
+def _percent_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(
+                f"{irc.stat_label(label)} {irc.stat_value(_format_leaderboard_percent(value))}"
+            )
+    return bits
+
+
+def _run_value_stats(stat: dict, pairs: tuple) -> list[str]:
+    bits = []
+    for keys, label in pairs:
+        value = _number_value(stat, keys)
+        if value is not None:
+            bits.append(f"{irc.stat_label(label)} {irc.stat_value(_format_signed(value))}")
+    return bits
 
 
 def _format_percent(value: float) -> str:
@@ -1169,6 +1449,51 @@ def _first_value(stat: dict, keys: tuple[str, ...]) -> object | None:
         if value not in (None, ""):
             return value
     return None
+
+
+def _number_value(stat: dict, keys: str | tuple[str, ...]) -> float | None:
+    if isinstance(keys, str):
+        keys = (keys,)
+    value = _first_value(stat, keys)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_number(value: float | None, decimals: int) -> str:
+    if value is None:
+        return ""
+    return f"{value:.{decimals}f}".rstrip("0").rstrip(".")
+
+
+def _format_decimal(value: float) -> str:
+    text = f"{value:.3f}"
+    if 0 < value < 1:
+        return text.lstrip("0")
+    if -1 < value < 0:
+        return "-" + text.lstrip("-0")
+    return text.rstrip("0").rstrip(".")
+
+
+def _format_leaderboard_percent(value: float) -> str:
+    if -1 <= value <= 1:
+        value *= 100
+    return _format_percent_value(value)
+
+
+def _format_signed(value: float) -> str:
+    return f"{value:+.1f}".replace("+0.0", "0.0").replace("-0.0", "0.0")
+
+
+def _ordinal(value: float) -> str:
+    number = int(round(value))
+    suffix = "th"
+    if number % 100 not in (11, 12, 13):
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
 
 
 def _display(value: object) -> str:

@@ -1,5 +1,41 @@
 # Project Memory
 
+## 2026-06-12 - TASK-079: Add Savant Leaderboard Commands
+
+- Goal: add compact IRC commands for the interesting Baseball Savant and
+  leaderboard-derived player snapshots discussed after the HR park alert work.
+- Starting point: local `main` is clean and ahead of `origin/main` by the
+  TASK-078 deployment-record commit `b05dea0`; deployed app code is
+  `4e077b00e03d125641873d222d2ad6594d48c940`.
+- Findings: the public Savant pages expose several useful leaderboards as
+  embedded page data rather than consistent JSON endpoints. Current live probes
+  found usable rows for percentile rankings, expected stats, sprint speed, bat
+  tracking, swing/take batting run value, fielding run value, baserunning run
+  value, and arm strength when the leaderboard-specific query parameters are
+  supplied.
+- Planned changes: add a reusable Savant embedded-data parser and player-row
+  lookup helpers, wire player commands for the new snapshots, update
+  `@help`/README/command/API docs, add command and client parser tests, then
+  run the normal local release checks before committing.
+- Changes: added `@savant`/`@percentiles`, `@xstats`, `@speed`, `@bat`,
+  `@runvalue`/`@rv`, `@fieldrv`/`@fieldingrv`/`@frv`, `@baserun`/
+  `@baserunning`/`@brv`, and `@arm`/`@armstrength`. The client now parses
+  embedded official Savant leaderboard arrays and matches rows by MLBAM player
+  id. Help, README, command docs, and API notes cover the new commands and the
+  volatility of Savant page-data parsing.
+- Verification: focused command/help tests pass; focused Savant client parser
+  tests pass; `.\.venv\Scripts\python -m pytest -q -o
+  cache_dir=.tmp\pytest-cache --basetemp=.tmp\pytest-basetemp` passes with 72
+  tests and known dependency deprecation warnings; `.\.venv\Scripts\python -m
+  ruff check .` passes; `.\.venv\Scripts\python -m mlb_irc_bot --dry-run`
+  passes; `git diff --check` passes with only expected Windows line-ending
+  warnings.
+- Live probe: real current Savant command probes returned compact rows for
+  `@savant Shohei Ohtani`, `@xstats Shohei Ohtani`, `@speed Bobby Witt Jr.`,
+  `@bat Shohei Ohtani`, `@runvalue Matt Olson`, `@fieldrv Pete Crow-Armstrong`,
+  `@baserun Nasim Nunez`, and `@arm Oneil Cruz`.
+- Commit: pending.
+
 ## 2026-06-11 - TASK-078: Retry HR Park Details
 
 - Goal: fix live home run alerts missing `HR parks` because Baseball Savant's

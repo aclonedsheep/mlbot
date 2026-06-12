@@ -31,6 +31,14 @@ Async IRC bot for a single MLB channel. It answers schedule, game, standings, wi
 - `@teamleaders TEAM [category] [limit]` shows team leaders.
 - `@defense <player name> [season]` shows Outs Above Average-style defense stats.
 - `@arsenal <player name> [season]` shows pitch mix.
+- `@savant <player name> [season]` shows a Savant percentile snapshot.
+- `@xstats <player name> [season]` shows Savant expected stats and batted-ball quality.
+- `@speed <player name> [season]` shows Savant sprint speed.
+- `@bat <player name> [season]` shows Savant bat tracking.
+- `@runvalue <player name> [season]` shows Savant swing/take batting run value.
+- `@fieldrv <player name> [season]` shows Savant fielding run value.
+- `@baserun <player name> [season]` shows Savant baserunning run value.
+- `@arm <player name> [season]` shows Savant arm strength.
 - `@transactions [TEAM] [today|yesterday|7 days|YYYY-MM-DD]` shows recent player transactions.
 - `@leaders <category> [limit]` shows stat leaders.
 - `@help [command]` lists command help.

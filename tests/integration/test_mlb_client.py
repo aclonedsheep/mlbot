@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from urllib.parse import parse_qs, urlparse
 
@@ -6,6 +7,7 @@ import pytest
 import respx
 
 from mlb_irc_bot.mlb.client import MLBStatsClient
+from mlb_irc_bot.mlb.models import PlayerSearchResult
 
 
 @pytest.mark.asyncio
@@ -263,6 +265,120 @@ async def test_enrich_home_run_data_refreshes_stale_savant_cache() -> None:
     assert feed["liveData"]["plays"]["allPlays"][0]["homeRunData"]["otherParks"] == 29
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_savant_leaderboards_parse_embedded_page_rows() -> None:
+    player = _player()
+    percentiles_route = respx.get(
+        "https://baseballsavant.mlb.com/leaderboard/percentile-rankings"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            content=_savant_html(
+                "leaderboard_data",
+                [
+                    {"player_id": "1", "percent_rank_xwoba": 10},
+                    {"player_id": "660271", "percent_rank_xwoba": 98},
+                ],
+            ),
+        )
+    )
+    expected_route = respx.get(
+        "https://baseballsavant.mlb.com/leaderboard/expected_statistics"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            content=_savant_html(
+                "data",
+                [{"entity_id": 660271, "est_woba": ".420", "exit_velocity_avg": 94.2}],
+            ),
+        )
+    )
+
+    async with MLBStatsClient() as client:
+        percentiles = await client.get_savant_percentiles(player, season=2026)
+        expected = await client.get_savant_expected_stats(player, season=2026)
+
+    assert percentiles.stats["percent_rank_xwoba"] == 98
+    assert expected.stats["est_woba"] == ".420"
+    params = parse_qs(urlparse(str(percentiles_route.calls.last.request.url)).query)
+    assert params["type"] == ["batter"]
+    assert params["year"] == ["2026"]
+    params = parse_qs(urlparse(str(expected_route.calls.last.request.url)).query)
+    assert params["min"] == ["0"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_savant_tracking_and_run_value_queries() -> None:
+    player = _player()
+    routes = {
+        "bat": respx.get("https://baseballsavant.mlb.com/leaderboard/bat-tracking").mock(
+            return_value=httpx.Response(
+                200,
+                content=_savant_html("data", [{"id": 660271, "avg_sweetspot_speed_mph": 75.8}]),
+            )
+        ),
+        "runvalue": respx.get("https://baseballsavant.mlb.com/leaderboard/swing-take").mock(
+            return_value=httpx.Response(
+                200,
+                content=_savant_html("data", [{"player_id": "660271", "runs_all": 16.8}]),
+            )
+        ),
+        "fieldrv": respx.get(
+            "https://baseballsavant.mlb.com/leaderboard/fielding-run-value"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                content=_savant_html("data", [{"id": 660271, "total_runs": 13.1}]),
+            )
+        ),
+        "baserun": respx.get(
+            "https://baseballsavant.mlb.com/leaderboard/baserunning-run-value"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                content=_savant_html("data", [{"entity_id": 660271, "runner_runs_tot": 4.0}]),
+            )
+        ),
+        "arm": respx.get("https://baseballsavant.mlb.com/leaderboard/arm-strength").mock(
+            return_value=httpx.Response(
+                200,
+                content=_savant_html("data", [{"player_id": "660271", "arm_overall": 87.3}]),
+            )
+        ),
+        "speed": respx.get("https://baseballsavant.mlb.com/leaderboard/sprint_speed").mock(
+            return_value=httpx.Response(
+                200,
+                content=_savant_html(
+                    "data",
+                    [{"runner_id": "660271", "r_sprint_speed_top50percent": 28.7}],
+                ),
+            )
+        ),
+    }
+
+    async with MLBStatsClient() as client:
+        bat = await client.get_savant_bat_tracking(player, season=2026)
+        runvalue = await client.get_savant_run_value(player, season=2026)
+        fieldrv = await client.get_savant_fielding_run_value(player, season=2026)
+        baserun = await client.get_savant_baserunning_run_value(player, season=2026)
+        arm = await client.get_savant_arm_strength(player, season=2026)
+        speed = await client.get_savant_sprint_speed(player, season=2026)
+
+    assert bat.stats["avg_sweetspot_speed_mph"] == 75.8
+    assert runvalue.stats["runs_all"] == 16.8
+    assert fieldrv.stats["total_runs"] == 13.1
+    assert baserun.stats["runner_runs_tot"] == 4.0
+    assert arm.stats["arm_overall"] == 87.3
+    assert speed.stats["r_sprint_speed_top50percent"] == 28.7
+    bat_params = parse_qs(urlparse(str(routes["bat"].calls.last.request.url)).query)
+    assert bat_params["minSwings"] == ["1"]
+    assert bat_params["seasonStart"] == ["2026"]
+    fieldrv_params = parse_qs(urlparse(str(routes["fieldrv"].calls.last.request.url)).query)
+    assert fieldrv_params["minInnings"] == ["0"]
+
+
 def _schedule_payload() -> dict:
     return {
         "dates": [
@@ -342,3 +458,17 @@ def _savant_home_run_row(play_id: str, parks: int) -> dict:
         "launch_angle": "28",
         "hr_distance": "412",
     }
+
+
+def _player() -> PlayerSearchResult:
+    return PlayerSearchResult(
+        person_id=660271,
+        full_name="Shohei Ohtani",
+        team_name="Los Angeles Dodgers",
+        position="DH",
+        active=True,
+    )
+
+
+def _savant_html(variable: str, rows: list[dict], *, declaration: str = "var") -> bytes:
+    return f"<html><script>{declaration} {variable} = {json.dumps(rows)};</script></html>".encode()

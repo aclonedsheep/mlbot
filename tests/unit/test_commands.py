@@ -16,6 +16,7 @@ from mlb_irc_bot.mlb.models import (
     PitchArsenalEntry,
     PlayerSearchResult,
     PlayerStats,
+    SavantLeaderboardRow,
     StandingTeam,
     TeamInfo,
     TeamLeaderGroup,
@@ -415,6 +416,130 @@ class FakeClient:
             PitchArsenalEntry("Slider", count=70, percentage=32.1, average_speed=86.2),
         ]
 
+    async def get_savant_percentiles(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "percentiles",
+            {
+                "percent_rank_xwoba": 98,
+                "percent_rank_xslg": 96,
+                "percent_rank_exit_velocity_avg": 96,
+                "percent_rank_hard_hit_percent": 95,
+                "percent_rank_barrel": 95,
+                "percent_rank_bb_percent": 94,
+                "percent_rank_k_percent": 61,
+                "percent_rank_sprint_speed": 56,
+                "percent_rank_swing_speed": 79,
+            },
+        )
+
+    async def get_savant_expected_stats(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "expected stats",
+            {
+                "est_ba": ".310",
+                "est_slg": ".640",
+                "est_woba": ".420",
+                "exit_velocity_avg": 94.2,
+                "exit_velocity_max": 119.1,
+                "hard_hit_percent": 57.4,
+                "barrels_per_bip": 22.8,
+                "barrels_per_pa": 13.1,
+                "sweet_spot_percent": 38.6,
+            },
+        )
+
+    async def get_savant_sprint_speed(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "sprint speed",
+            {
+                "r_sprint_speed_top50percent_pretty": "28.7",
+                "n_bolts": 9,
+                "hp_to_1b": 4.19,
+                "speed_order": 72,
+            },
+        )
+
+    async def get_savant_bat_tracking(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "bat tracking",
+            {
+                "avg_sweetspot_speed_mph": 75.8,
+                "attack_angle": 13.4,
+                "swing_length": 7.9,
+                "squared_up_per_bat_contact": 0.348,
+                "rate_ideal_attack_angle": 0.584,
+                "delta_run_exp": 9.6,
+                "count": 284,
+            },
+        )
+
+    async def get_savant_run_value(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "batting run value",
+            {
+                "runs_all": 16.8,
+                "runs_heart": 6.2,
+                "runs_shadow": -3.0,
+                "runs_chase": 8.0,
+                "runs_waste": 5.5,
+                "pa": 297,
+                "pitches": 1283,
+            },
+        )
+
+    async def get_savant_fielding_run_value(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "fielding run value",
+            {
+                "total_runs": 13.1,
+                "range_runs": 10.4,
+                "arm_runs": 2.7,
+                "dp_runs": 0.0,
+                "outs_total": 1777,
+            },
+        )
+
+    async def get_savant_baserunning_run_value(
+        self, player: PlayerSearchResult, *, season: int
+    ):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "baserunning run value",
+            {
+                "runner_runs_tot": 4.0,
+                "runner_runs_SBX": 3.4,
+                "runner_runs_XB": 0.7,
+                "N_runner_moved": 88,
+                "N_runner_moved_XB": 42,
+            },
+        )
+
+    async def get_savant_arm_strength(self, player: PlayerSearchResult, *, season: int):
+        return SavantLeaderboardRow(
+            player,
+            season,
+            "arm strength",
+            {
+                "arm_overall": 87.3,
+                "max_arm_strength": 94.1,
+                "total_throws": 157,
+                "primary_pos_name_short": "OF",
+            },
+        )
+
     async def get_transactions(
         self,
         *,
@@ -524,7 +649,8 @@ async def test_help_and_error_replies_use_irc_formatting() -> None:
         "@weather, @highlights, @replay, @mlbpitcher, @mlbpitchers, @mlblineup | "
         "standings: @standings, @wildcard | stats: @sstats, @gamelog, "
         "@splits, @teamstats, @teamrank, @teamleaders, @leaders, @defense, "
-        "@arsenal | other: @transactions, @more, @help <command>"
+        "@arsenal, @savant, @xstats, @speed, @bat, @runvalue, @fieldrv, "
+        "@baserun, @arm | other: @transactions, @more, @help <command>"
     ]
     assert _plain(error_replies) == ["Unknown command: @bogus. Try @help."]
     assert BOLD in help_replies[0]
@@ -559,6 +685,23 @@ async def test_help_topics_cover_all_commands_and_aliases() -> None:
         "teamleaders",
         "defense",
         "arsenal",
+        "savant",
+        "percentiles",
+        "xstats",
+        "speed",
+        "sprint",
+        "bat",
+        "battrack",
+        "runvalue",
+        "rv",
+        "fieldrv",
+        "fieldingrv",
+        "frv",
+        "baserun",
+        "baserunning",
+        "brv",
+        "arm",
+        "armstrength",
         "transactions",
         "highlights",
         "more",
@@ -1010,6 +1153,53 @@ async def test_team_split_rank_leaders_defense_and_arsenal_commands() -> None:
     assert _plain(arsenal) == [
         "Tarik Skubal arsenal: Four-Seam Fastball 55.5%, 96.4 mph, 120 pit; "
         "Slider 32.1%, 86.2 mph, 70 pit"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_savant_leaderboard_commands() -> None:
+    client = FakeClient()
+    router = CommandRouter(client=client, settings=settings(), now=fixed_now)
+
+    savant = await router.handle_message("@savant Shohei Ohtani")
+    xstats = await router.handle_message("@xstats Shohei Ohtani")
+    speed = await router.handle_message("@speed Shohei Ohtani")
+    bat = await router.handle_message("@bat Shohei Ohtani")
+    runvalue = await router.handle_message("@runvalue Shohei Ohtani")
+    fieldrv = await router.handle_message("@fieldrv Shohei Ohtani")
+    baserun = await router.handle_message("@baserun Shohei Ohtani")
+    arm = await router.handle_message("@arm Shohei Ohtani")
+
+    assert _plain(savant) == [
+        "Shohei Ohtani 2026 Savant: xwOBA 98th, xSLG 96th, EV 96th, "
+        "HardHit 95th, Barrel 95th, BB 94th, K 61st, Sprint 56th, BatSpd 79th"
+    ]
+    assert _plain(xstats) == [
+        "Shohei Ohtani 2026 xStats: xBA .310, xSLG .640, xwOBA .420, "
+        "EV 94.2 mph, MaxEV 119.1 mph, HH 57.4%, Brl/BIP 22.8%, "
+        "Brl/PA 13.1%, SweetSpot 38.6%"
+    ]
+    assert _plain(speed) == [
+        "Shohei Ohtani 2026 Speed: Sprint 28.7 ft/s, bolts 9, HP-1B 4.19, rank 72"
+    ]
+    assert _plain(bat) == [
+        "Shohei Ohtani 2026 Bat: BatSpd 75.8 mph, Attack 13.4 deg, "
+        "Length 7.9 ft, Squared 34.8%, Ideal 58.4%, RV +9.6, swings 284"
+    ]
+    assert _plain(runvalue) == [
+        "Shohei Ohtani 2026 RunValue: RV +16.8, heart +6.2, shadow -3.0, "
+        "chase +8.0, waste +5.5, PA 297, pitches 1283"
+    ]
+    assert _plain(fieldrv) == [
+        "Shohei Ohtani 2026 FieldRV: RV +13.1, range +10.4, arm +2.7, "
+        "DP 0.0, outs 1777"
+    ]
+    assert _plain(baserun) == [
+        "Shohei Ohtani 2026 BaseRun: RV +4.0, steal +3.4, extra +0.7, "
+        "moved 88, extra att 42"
+    ]
+    assert _plain(arm) == [
+        "Shohei Ohtani 2026 Arm: Arm 87.3 mph, Max 94.1 mph, throws 157, pos OF"
     ]
 
 

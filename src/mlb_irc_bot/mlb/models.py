@@ -235,3 +235,11 @@ class PitchArsenalEntry:
     count: int | None = None
     percentage: float | None = None
     average_speed: float | None = None
+
+
+@dataclass(frozen=True)
+class SavantLeaderboardRow:
+    player: PlayerSearchResult
+    season: int
+    leaderboard: str
+    stats: JsonDict = field(default_factory=dict)

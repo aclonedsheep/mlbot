@@ -24,6 +24,15 @@ The project calls the MLB Stats API directly instead of using a wrapper because 
 - Home run park counts: Baseball Savant `/leaderboard/home-runs?type=details&player_id={id}&year={year}&player_type=Batters&cat=xhr`.
   The bot matches Savant rows to MLB live-feed home run plays by batted-ball `playId`
   and treats this enrichment as optional.
+- Baseball Savant leaderboard page data for player snapshots:
+  `/leaderboard/percentile-rankings`, `/leaderboard/expected_statistics`,
+  `/leaderboard/sprint_speed`, `/leaderboard/bat-tracking`,
+  `/leaderboard/swing-take`, `/leaderboard/fielding-run-value`,
+  `/leaderboard/baserunning-run-value`, and `/leaderboard/arm-strength`.
+  These public pages currently embed leaderboard arrays in the HTML as variables
+  such as `leaderboard_data` or `data`; the bot parses the embedded array and
+  matches rows by MLBAM player id. Treat these commands as optional/volatile
+  because the page markup and minimum-qualification behavior can change.
 
 ## Player Stat Types
 
@@ -50,11 +59,9 @@ opponent, and batting-order splits. The split commands use the public
 `/api/v1/stats/leaders` when categories such as wRC+, WAR, FIP, xFIP, or xwOBA
 are not available through the league-leader endpoint.
 
-The bot treats advanced, sabermetric, and expected-stat responses as optional because
-support can vary by group, player, date range, and future API changes. A separate paid API
-is not required for the MLB Stats API WAR and expected-stat fields above, but complete
-Baseball Savant/Statcast-style expected metrics may require Baseball Savant CSV endpoints
-or another data source and should be considered less stable.
+The bot treats advanced, sabermetric, expected-stat, and Savant leaderboard responses
+as optional because support can vary by group, player, date range, qualification
+threshold, and future API changes.
 
 ## Hydrate Probe
 

@@ -1,4 +1,6 @@
 import asyncio
+import json
+import re
 from dataclasses import replace
 from datetime import date, datetime
 from html.parser import HTMLParser
@@ -21,6 +23,7 @@ from mlb_irc_bot.mlb.models import (
     PitcherInfo,
     PlayerSearchResult,
     PlayerStats,
+    SavantLeaderboardRow,
     StandingTeam,
     TeamInfo,
     TeamLeaderGroup,
@@ -708,6 +711,164 @@ class MLBStatsClient:
             )
         return sorted(entries, key=lambda entry: entry.percentage or 0, reverse=True)
 
+    async def get_savant_percentiles(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="percentiles",
+            path="/leaderboard/percentile-rankings",
+            variable="leaderboard_data",
+            params={
+                "type": "batter",
+                "year": season,
+                "team": "",
+                "sort": "xwoba",
+                "sortDir": "desc",
+            },
+            id_keys=("player_id", "pid", "id"),
+        )
+
+    async def get_savant_expected_stats(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="expected stats",
+            path="/leaderboard/expected_statistics",
+            variable="data",
+            params={
+                "type": "batter",
+                "year": season,
+                "position": "",
+                "team": "",
+                "min": 0,
+            },
+            id_keys=("entity_id", "player_id", "pid", "id"),
+        )
+
+    async def get_savant_sprint_speed(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="sprint speed",
+            path="/leaderboard/sprint_speed",
+            variable="data",
+            params={"year": season, "position": "", "team": "", "min": 0},
+            id_keys=("runner_id", "player_id", "entity_id", "id"),
+        )
+
+    async def get_savant_bat_tracking(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="bat tracking",
+            path="/leaderboard/bat-tracking",
+            variable="data",
+            params={
+                "gameType": "Regular",
+                "minGroupSwings": 1,
+                "minSwings": 1,
+                "seasonEnd": season,
+                "seasonStart": season,
+                "type": "batter",
+            },
+            id_keys=("id", "savant_batter_id", "batter_id", "player_id"),
+        )
+
+    async def get_savant_run_value(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="batting run value",
+            path="/leaderboard/swing-take",
+            variable="data",
+            params={"year": season},
+            id_keys=("player_id", "pid", "id"),
+        )
+
+    async def get_savant_fielding_run_value(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="fielding run value",
+            path="/leaderboard/fielding-run-value",
+            variable="data",
+            params={
+                "type": "fielder",
+                "seasonStart": season,
+                "seasonEnd": season,
+                "minInnings": 0,
+            },
+            id_keys=("id", "player_id", "entity_id", "pid"),
+        )
+
+    async def get_savant_baserunning_run_value(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="baserunning run value",
+            path="/leaderboard/baserunning-run-value",
+            variable="data",
+            params={"season": season, "type": "runner"},
+            id_keys=("entity_id", "player_id", "pid", "id"),
+        )
+
+    async def get_savant_arm_strength(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+    ) -> SavantLeaderboardRow:
+        return await self._get_savant_leaderboard_row(
+            player,
+            season=season,
+            leaderboard="arm strength",
+            path="/leaderboard/arm-strength",
+            variable="data",
+            params={
+                "type": "player",
+                "year": season,
+                "minThrows": 0,
+                "pos": "",
+                "team": "",
+            },
+            id_keys=("player_id", "fielder_id", "entity_id", "id"),
+        )
+
     async def get_team_leaders(
         self,
         team: TeamInfo,
@@ -939,6 +1100,36 @@ class MLBStatsClient:
         self._home_run_detail_cache[cache_key] = rows
         return rows
 
+    async def _get_savant_leaderboard_row(
+        self,
+        player: PlayerSearchResult,
+        *,
+        season: int,
+        leaderboard: str,
+        path: str,
+        variable: str,
+        params: dict[str, Any],
+        id_keys: tuple[str, ...],
+    ) -> SavantLeaderboardRow:
+        rows = await self._get_savant_embedded_rows(path, params=params, variable=variable)
+        row = _find_savant_player_row(rows, player_id=player.person_id, id_keys=id_keys)
+        return SavantLeaderboardRow(
+            player=player,
+            season=season,
+            leaderboard=leaderboard,
+            stats=row,
+        )
+
+    async def _get_savant_embedded_rows(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any],
+        variable: str,
+    ) -> list[JsonDict]:
+        html = await self._get_savant_text(path, params=params)
+        return _extract_savant_embedded_array(html, variable=variable, label=path)
+
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> JsonDict:
         url = f"{self.base_url}{path}"
         payload = await self._get_json(url, params=params, label=path)
@@ -947,6 +1138,15 @@ class MLBStatsClient:
     async def _get_savant(self, path: str, params: dict[str, Any] | None = None) -> Any:
         url = f"{self.savant_base_url}{path}"
         return await self._get_json(url, params=params, label=path)
+
+    async def _get_savant_text(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> str:
+        url = f"{self.savant_base_url}{path}"
+        return await self._get_text(url, params=params, label=path)
 
     async def _resolve_highlight_mp4_urls(
         self, highlights: list[GameHighlight]
@@ -979,11 +1179,17 @@ class MLBStatsClient:
                     await asyncio.sleep(0.25)
         raise MLBAPIError(f"MLB API request failed for {label}: {last_error}") from last_error
 
-    async def _get_text(self, url: str, *, label: str) -> str:
+    async def _get_text(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        label: str,
+    ) -> str:
         last_error: Exception | None = None
         for attempt in range(2):
             try:
-                response = await self._client.get(url)
+                response = await self._client.get(url, params=params)
                 response.raise_for_status()
                 return response.text
             except httpx.HTTPError as exc:
@@ -1520,6 +1726,64 @@ def _find_home_run_detail(rows: list[JsonDict], *, game_pk: int, play_id: str) -
         if str(row.get("game_pk")) == str(game_pk) and row.get("play_id") == play_id:
             return row
     return {}
+
+
+def _find_savant_player_row(
+    rows: list[JsonDict],
+    *,
+    player_id: int,
+    id_keys: tuple[str, ...],
+) -> JsonDict:
+    for row in rows:
+        if any(_safe_int(row.get(key)) == player_id for key in id_keys):
+            return row
+    return {}
+
+
+def _extract_savant_embedded_array(
+    html: str,
+    *,
+    variable: str,
+    label: str,
+) -> list[JsonDict]:
+    match = re.search(rf"(?:var|const|let)\s+{re.escape(variable)}\s*=\s*\[", html)
+    if match is None:
+        return []
+
+    start = match.end() - 1
+    end = _balanced_json_array_end(html, start)
+    if end is None:
+        raise MLBAPIError(f"MLB API request failed for {label}: malformed Savant data")
+
+    try:
+        payload = json.loads(html[start:end])
+    except ValueError as exc:
+        raise MLBAPIError(f"MLB API request failed for {label}: malformed Savant data") from exc
+    return [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else []
+
+
+def _balanced_json_array_end(value: str, start: int) -> int | None:
+    depth = 0
+    in_string = False
+    escape = False
+    for index, char in enumerate(value[start:], start=start):
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return None
 
 
 def _raw_linescore(raw: JsonDict) -> JsonDict:

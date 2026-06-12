@@ -365,6 +365,27 @@ checkout did not contain the backlog file.
   deployed and waiting on normal polling to send a follow-up only after Savant
   catches up.
 
+### TASK-079 - Add Savant Leaderboard Commands
+
+- Status: Done.
+- Goal: add compact player commands for the useful Baseball Savant and
+  leaderboard-derived stats discussed after the HR park alert work.
+- Result: added `@savant`/`@percentiles`, `@xstats`, `@speed`, `@bat`,
+  `@runvalue`/`@rv`, `@fieldrv`/`@fieldingrv`/`@frv`, `@baserun`/
+  `@baserunning`/`@brv`, and `@arm`/`@armstrength`. The bot parses embedded
+  official Savant leaderboard page arrays, matches rows by MLBAM player id, and
+  formats one compact IRC line per command. Help, README, command docs, and API
+  notes now document the new surface and note that Savant page data is optional
+  and volatile.
+- Verification: focused command/help and Savant client parser tests pass;
+  `pytest` passes with 72 tests; `ruff check .` passes; `python -m
+  mlb_irc_bot --dry-run` passes; `git diff --check` passes with only expected
+  Windows line-ending warnings. A live probe against current Savant pages
+  returned rows for `@savant Shohei Ohtani`, `@xstats Shohei Ohtani`, `@speed
+  Bobby Witt Jr.`, `@bat Shohei Ohtani`, `@runvalue Matt Olson`, `@fieldrv
+  Pete Crow-Armstrong`, `@baserun Nasim Nunez`, and `@arm Oneil Cruz`.
+- Deployment: pending.
+
 ## Next Candidates
 
 - Watch a naturally firing barrel or overlapping-play alert in `#mlbtest` and
