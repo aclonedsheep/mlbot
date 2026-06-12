@@ -323,7 +323,16 @@ checkout did not contain the backlog file.
 - Verification: focused alert detector regressions pass; `pytest` passes with
   67 tests; `ruff check .` passes; `python -m mlb_irc_bot --dry-run` passes;
   `git diff --check` passes with only expected Windows line-ending warnings.
-- Deployment: pending.
+- Deployment: pushed and deployed `c98ef06` to the VPS. The deploy script
+  fast-forwarded `/home/wolfb/mlbot` from `08b2412` to `c98ef06`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `c98ef06f7a27c5492edc4e6ae89675326b5b3062`; Docker reported
+  `mlbot-mlb-irc-bot-1` running with `restarts=0`.
+- Live check gap: no natural home run alert fired during the deploy window, so
+  the exact label still needs a real `#mlbtest` watch if it feels worth judging
+  in-channel.
 
 ## Next Candidates
 

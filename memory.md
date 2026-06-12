@@ -22,11 +22,25 @@
   deprecation warnings; `.\.venv\Scripts\python -m ruff check .` passes;
   `.\.venv\Scripts\python -m mlb_irc_bot --dry-run` passes; `git diff --check`
   passes with only expected Windows line-ending warnings.
-- Deployment: pending.
-- Commit: pending.
-- Resume prompt: Continue after TASK-077 local verification; HR alerts now
-  label Savant park reach as `HR parks 80% (24/30)`-style percentage/count
-  text, but deployment is still pending.
+- Commit: `c98ef06f7a27c5492edc4e6ae89675326b5b3062`
+  (`[TASK-077] Show HR park percentage`).
+- Deployment: pushed and deployed `c98ef06` to the VPS with
+  `powershell.exe -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`; the
+  deploy fast-forwarded `/home/wolfb/mlbot` from `08b2412` to `c98ef06`,
+  rebuilt/recreated the Compose service, and the in-container dry-run passed
+  for `slopstats` on Libera `#mlbtest`.
+- Post-deploy check: remote checkout was clean at
+  `c98ef06f7a27c5492edc4e6ae89675326b5b3062`; `docker compose ps` showed
+  `mlbot-mlb-irc-bot-1` up; `docker inspect` reported `status=running
+  running=true restarts=0 started=2026-06-12T00:10:31.567741881Z`.
+- Live check gap: no natural home run alert replay was captured during the
+  deploy window, so the exact live IRC line still needs a natural `#mlbtest`
+  watch if the label feels worth judging in-channel.
+- Resume prompt: Continue after TASK-077; HR alerts now label Savant park reach
+  as `HR parks 80% (24/30)`-style percentage/count text. The implementation is
+  committed at `c98ef06`, deployed on the VPS, and remote dry-run/container
+  checks pass. Next useful step is to watch a naturally firing home run alert
+  in `#mlbtest` and tweak only if the `HR parks` label feels unclear.
 
 ## 2026-06-11 - TASK-076: Add High-Leverage Situation Context
 
